@@ -51,7 +51,7 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 502)
         self.assertIn("No sections", response.json()["detail"])
 
-    def test_add_is_idempotent_and_refresh_obeys_hourly_cooldown(self):
+    def test_add_is_idempotent_and_refresh_obeys_configured_cooldown(self):
         response = self.add()
         self.assertEqual(response.status_code, 201)
         item = response.json()

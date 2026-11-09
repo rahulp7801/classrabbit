@@ -1,0 +1,13 @@
+{
+  "result": "pass",
+  "course": "ENGR 186W",
+  "class_id": "186827200",
+  "source_mode": "controlled discussion availability; real scheduler, SQLite, SSE, and Chromium",
+  "configured_check_interval_seconds": 30,
+  "clock_accelerated": false,
+  "manual_refresh": false,
+  "source_change_to_visible_alert_seconds": 30.119,
+  "source_return_to_visible_alert_ms": 219.66,
+  "lecture_seats_unchanged": 10,
+  "does_not_prove": "Real UCLA publication delay or background phone delivery."
+}

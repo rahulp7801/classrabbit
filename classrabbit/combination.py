@@ -1,6 +1,8 @@
 """Conservatively verify one complete path through UCLA's linked section tree."""
 
 from dataclasses import replace
+from datetime import datetime, timezone
+from html import escape
 import json
 import re
 from urllib.parse import urlencode, urljoin
@@ -43,6 +45,8 @@ def column(row, name):
 
 
 def status_counts(text):
+    if re.search(r"-\s*\d", text):
+        raise SourceError("Required section has negative seat counts.")
     match = re.match(r"^(Open|Closed|Full|Waitlist(?:ed)?|Cancel(?:led|ed)?)\b", text, re.I)
     if not match:
         raise SourceError(f"Required section has an unknown status: {text!r}")
@@ -56,6 +60,8 @@ def status_counts(text):
         return int(value.replace(",", ""))
     capacity = number(enrolled[2]) if enrolled else number(full[1]) if full else None
     available = number(left[1]) if left else (capacity - number(enrolled[1]) if enrolled else 0 if status == "closed" else None)
+    if left and enrolled and available != capacity - number(enrolled[1]):
+        raise SourceError("Required section has inconsistent enrolled and remaining counts.")
     if (available is not None and available < 0) or (capacity is not None and available is not None and available > capacity):
         raise SourceError("Required section has inconsistent seat counts.")
     if status == "open" and (available is None or available <= 0 or capacity is None):
@@ -185,3 +191,50 @@ def assess_combination(snapshot, listing, fetch_summary=None):
     except SourceError as exc:
         return replace(snapshot, combination_status="unknown", linked_sections=linked,
                        combination_reason=f"Required sections could not be verified: {exc}")
+
+
+def check_summary_combination(metadata, listing, fetch_summary=None):
+    """Refresh primary and child counts via public summaries, keeping metadata separate.
+
+    These HTTP responses have been observed with no-cache, but UCLA publishes no
+    underlying freshness guarantee for this endpoint. No realtime claim is made.
+    """
+    fetch_summary = fetch_summary or fetch
+    identity = validate_url(metadata.source_url)
+    doc = Document(listing)
+    rows = [n for n in doc.root.all() if "primary-row" in n.attrs.get("class", "").split()
+            and n.attrs.get("id", "").startswith(metadata.class_id + "_")]
+    if len(rows) != 1:
+        raise SourceError("The watched lecture cannot be associated with its required sections.")
+    groups = [n for n in doc.root.all() if "class-title" in n.attrs.get("class", "").split()
+              and any(child is rows[0] for child in n.all())]
+    if len(groups) != 1:
+        raise SourceError("The watched lecture has ambiguous course metadata.")
+    root = models_in(listing).get(groups[0].attrs.get("id"))
+    if not root or root.get("IsRoot") is not True:
+        raise SourceError("Course-summary metadata is missing.")
+    expected = {"Term": identity["term_cd"], "SubjectAreaCode": identity["subj_area_cd"],
+                "CatalogNumber": identity["crs_catlg_no"]}
+    if any(str(root.get(k, "")).strip() != v.strip() for k, v in expected.items()):
+        raise SourceError("Course-summary metadata belongs to a different course or term.")
+    url = BASE + "Results/GetCourseSummary?" + urlencode({
+        "model": json.dumps(root), "FilterFlags": json.dumps({"advanced": "y"}), "IsMultiListedTitles": "false"})
+    markup = fetch_summary(url)
+    primary = [n for n in Document(markup).root.all() if "primary-row" in n.attrs.get("class", "").split()
+               and n.attrs.get("id", "").startswith(metadata.class_id + "_")]
+    if len(primary) != 1:
+        raise SourceError("The refreshed summary did not return the exact watched lecture.")
+    anchors = [n for n in column(primary[0], "sectionColumn").all()
+               if n.tag == "a" and "ClassDetail?" in n.attrs.get("href", "")]
+    if len(anchors) != 1:
+        raise SourceError("The refreshed lecture identity is missing.")
+    observed = validate_url(urljoin(BASE, anchors[0].attrs["href"]))
+    if any(observed[k].strip() != identity[k].strip() for k in identity):
+        raise SourceError("The refreshed summary belongs to a different lecture.")
+    status, available, capacity = status_counts(column(primary[0], "statusColumn").clean())
+    snapshot = replace(metadata, status=status, available=available, capacity=capacity,
+                       checked_at=datetime.now(timezone.utc).isoformat(), source="ucla_public_summary",
+                       source_notice="Public section-summary counts; underlying update delay is unverified. Detail-page metadata notice: " + metadata.source_notice)
+    # The summary returns a primarySection fragment rather than a course-title wrapper.
+    wrapped = '<div class="class-title" id="' + escape(str(root["Path"]), quote=True) + '">' + markup + '</div>'
+    return assess_combination(snapshot, wrapped, fetch_summary)

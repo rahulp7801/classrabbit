@@ -26,7 +26,7 @@
     <header class="topbar"><span>YOUR NEXT CHAPTER, ONE CLASS AT A TIME</span><div class="topbar-right"><span class="campus-tag">University of California, Los Angeles</span><span class="avatar" aria-label="Local user">U</span></div></header>
     <main id="main">
       <div class="page-heading"><div><div class="eyebrow">MAKE ROOM FOR YOUR PLANS</div><h1 id="page-title">Your watchlist<span>.</span></h1><p id="page-description">The classes you want. A little closer.</p></div><button id="add-class" class="button primary"><span aria-hidden="true">+</span> Add a class</button></div>
-      <div id="source-banner" class="source-banner"><span class="banner-icon" aria-hidden="true">◷</span><p><strong>Public schedule · hourly updates</strong><span>Seat counts may lag. Confirm availability and enrollment restrictions in MyUCLA.</span><span id="alert-connection" role="status">Connecting in-app alerts…</span></p><span class="source-pill" id="source-mode">UCLA source</span></div>
+      <div id="source-banner" class="source-banner"><span class="banner-icon" aria-hidden="true">◷</span><p><strong id="source-heading">Public schedule · checking source</strong><span id="source-description">Seat counts may lag. Confirm availability and enrollment restrictions in MyUCLA.</span><span id="alert-connection" role="status">Connecting in-app alerts…</span></p><span class="source-pill" id="source-mode">UCLA source</span></div>
       <div id="fixture-banner" class="fixture-banner" hidden>Browser test session · simulated availability. This is not live UCLA data.</div>
       <section id="watchlist-view" aria-label="Watched classes">
         <div class="stats"><div class="stat"><span class="stat-icon purple" aria-hidden="true">◫</span><div><span>Classes you’re watching</span><strong id="total-count">0</strong></div></div><div class="stat"><span class="stat-icon green" aria-hidden="true">↗</span><div><span>Complete sets reported open</span><strong id="open-count">0</strong></div></div><div class="stat"><span class="stat-icon peach" aria-hidden="true">◷</span><div><span>Waiting for a complete set</span><strong id="closed-count">0</strong></div></div></div>
@@ -42,9 +42,9 @@
   </div>
   <dialog id="search-dialog" aria-labelledby="search-title">
     <div class="dialog-head"><div><span class="eyebrow">ONE STEP CLOSER</span><h2 id="search-title">Find your class.</h2></div><button class="icon-button" id="close-search" aria-label="Close class search">×</button></div>
-    <p class="dialog-description">Search UCLA’s public schedule, then choose the exact lecture section you want to watch.</p>
+    <p class="dialog-description">Choose a lecture. Its required discussions and labs are checked together before an opening alert is generated.</p>
     <form id="search-form"><div class="form-row"><label>Term<select id="term" name="term" required></select></label><label>Subject area<input id="subject" name="subject" value="COM SCI" placeholder="e.g. COM SCI" maxlength="20" required pattern="[A-Za-z &\-]+" autocomplete="off"></label><label class="course-field">Course number<input id="course" name="course" value="31" placeholder="e.g. 31 or 186W" maxlength="6" required pattern="[0-9]{1,4}[A-Za-z]{0,2}" autocomplete="off"></label></div><button id="search-submit" class="button primary" type="submit">Find sections <span aria-hidden="true">→</span></button></form>
-    <p class="search-note">Course numbers can include a suffix, such as 186W. Linked discussions and labs aren’t included in this search.</p>
+    <p class="search-note">Course numbers can include a suffix, such as 186W. Required linked sections are checked automatically for the selected lecture.</p>
     <div id="search-error" class="inline-error" role="alert" hidden></div>
     <div id="search-results" aria-live="polite"></div>
     <details class="paste-link"><summary>Have a UCLA section link?</summary><form id="link-form"><label>Public ClassDetail link<input type="url" id="section-url" required placeholder="https://sa.ucla.edu/ro/Public/SOC/Results/ClassDetail?…"></label><button class="button secondary" type="submit">Watch this section</button></form></details>

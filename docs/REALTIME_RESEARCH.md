@@ -4,7 +4,7 @@
 
 The application now pushes a detected reopening to connected browsers using a server-sent event. It no longer waits for the browser's 30-second dashboard refresh to show that alert. Reopening events are persisted before publication; repeated open observations do not generate another event. Reconnecting browsers can request replay after their last event ID.
 
-The controlled ENGR 186W test ran ten closed-to-one-seat-open transitions through a real local FastAPI server, SQLite state, the event stream, and real Playwright Chromium. From the test source adapter returning an opening to the browser visibly displaying its alert, the measured median was **30.20 ms**, with a maximum of **49.67 ms**. These measurements include the automation assertion overhead and apply to this local run, not a deployment latency guarantee.
+The controlled ENGR 186W test ran ten closed-to-one-seat-open transitions through a real local FastAPI server, SQLite state, the event stream, and real Playwright Chromium. From the test source adapter returning an opening to the browser visibly displaying its alert, the measured median was **29.09 ms**, with a maximum of **42.11 ms**. These measurements include the automation assertion overhead and apply to this local run, not a deployment latency guarantee.
 
 **Those transitions were simulated. No UCLA enrollment was changed. This does not prove the time between an actual dropped seat and UCLA publishing that change. No phone notifications were configured or sent.**
 
@@ -13,7 +13,7 @@ The controlled ENGR 186W test ran ten closed-to-one-seat-open transitions throug
 - Reproduce: `python -m tests.immediate_proof --iterations 10`
 - Raw trace: `.local/immediate-proof/trace.zip`
 
-The test uses a captured public response for the real section's identity and metadata, then keeps the lecture at 10 seats and controls the first discussion?s availability and the test clock. The real linked-section parser evaluates all six discussions before any event is emitted. It triggers a source check through the real refresh API; the browser receives an unsolicited event without clicking Refresh. There are no production endpoints for injecting fake seat counts.
+The test uses a captured public response for the real section's identity and metadata, then keeps the lecture at 10 seats and controls the first discussion's availability and the test clock. The real linked-section parser evaluates all six discussions before any event is emitted. It triggers a source check through the real refresh API; the browser receives an unsolicited event without clicking Refresh. There are no production endpoints for injecting fake seat counts.
 
 ## Exact requested class
 
@@ -63,7 +63,7 @@ The useful latency budget is:
 
 `UCLA publication delay + permitted check interval + check duration + event/notification delivery`
 
-Only the application event-delivery portion has a controlled sub-second measurement today. The default public adapter remains hourly; we did not simply shorten the timer and label cached data real time.
+The app now checks primary and required child availability through public section-summary responses every 30 seconds by default. Descriptions and restrictions are cached for up to an hour, but section counts are requested each cycle. The underlying UCLA publication delay is still unverified, so `realtime` remains false and `refresh_interval_seconds` is null. Fast requests do not establish an uncached database feed.
 
 ## Push delivery research
 
@@ -73,4 +73,12 @@ The current event stream is an **in-app alert while the page is open**, not an O
 
 ## Linked-section correction
 
-The earlier lecture-only report was insufficient. The captured ENGR 186W data has five full discussions (1A?1E) and one discussion closed by the department (1F). The app now shows this as no complete seat combination. A discussion opening with the lecture still at 10 seats produces an event; a lecture-only opening does not. Legacy lecture-only events are labeled historical and are not streamed as new combination alerts.
+The earlier lecture-only report was insufficient. The captured ENGR 186W data has five full discussions (1A-1E) and one discussion closed by the department (1F). The app now shows this as no complete seat combination. A discussion opening with the lecture still at 10 seats produces an event; a lecture-only opening does not. Legacy lecture-only events are labeled historical and are not streamed as new combination alerts.
+
+[Live public-source card showing the blocked discussions](evidence/engr186w-live-blocked.png).
+
+## Real-clock scheduling proof
+
+`python -m tests.scheduled_proof` runs an actual 30-second background worker cycle in a temporary server, without advancing the clock or requesting a manual refresh. The lecture stays at 10 seats while the controlled first discussion changes from closed to one seat available. The resulting complete-set alert appeared after **30.119 seconds** from that controlled change; source-adapter return to visible browser alert was **219.66 ms**, including browser-automation observation overhead.
+
+[Recorded real-clock scheduler evidence](evidence/engr186w-scheduled-timings.json) distinguishes this from the immediate-delivery timing test. It verifies application checking cadence and event delivery, not how quickly UCLA publishes a real dropped seat. The browser screenshot carries the simulated-data banner.

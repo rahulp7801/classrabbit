@@ -61,7 +61,7 @@ function courseParts(item) {
 }
 
 function completeSet(snapshot) {
-  return snapshot?.combination_status === "available" && snapshot.open_combinations?.length > 0;
+  return snapshot?.combination_status === "available" && snapshot.status === "open" && snapshot.available > 0 && snapshot.open_combinations?.length > 0;
 }
 
 function combinationLabel(snapshot) {
@@ -350,6 +350,9 @@ async function bootstrap() {
     const [source] = await Promise.all([api("/api/source"), loadDashboard()]);
     $("#fixture-banner").hidden = source.mode === "live";
     $("#source-mode").textContent = source.mode === "live" ? "UCLA source" : "Simulated source";
+    const seconds = source.check_interval_seconds;
+    $("#source-heading").textContent = `Public schedule · ${seconds < 60 ? seconds + "-second" : Math.round(seconds / 60) + "-minute"} checks`;
+    $("#source-description").textContent = source.notice;
     connectAlerts();
   } catch (error) {
     toast(error.message, true);

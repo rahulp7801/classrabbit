@@ -22,11 +22,11 @@ ARTIFACTS = Path(".local/browser-tests")
 
 
 @contextmanager
-def server(source_factory=FixtureSource):
+def server(source_factory=FixtureSource, *, worker=False, real_clock=False):
     with tempfile.TemporaryDirectory() as directory:
-        clock = Clock()
+        clock = time.time if real_clock else Clock()
         source = source_factory(clock)
-        app = create_app(Path(directory) / "browser.sqlite3", source, worker=False)
+        app = create_app(Path(directory) / "browser.sqlite3", source, worker=worker)
         listener = socket.socket()
         listener.bind(("127.0.0.1", 0))
         port = listener.getsockname()[1]

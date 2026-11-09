@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 import json
 import logging
+import os
 import sqlite3
 import threading
 import time
@@ -28,15 +29,33 @@ class WatchLimit(Exception):
 
 
 class PublicSource:
-    interval = 3600
     mode = "live"
-    label = "UCLA public schedule"
+    label = "UCLA public section summaries"
+    freshness = None
+    notice = "Checks run frequently, but UCLA's underlying public data may lag. Confirm the complete section set and eligibility in MyUCLA."
+
+    def __init__(self, poll_seconds=None):
+        self.interval = int(poll_seconds if poll_seconds is not None else os.environ.get("CLASSRABBIT_POLL_SECONDS", "30"))
+        if not 15 <= self.interval <= 3600:
+            raise ValueError("CLASSRABBIT_POLL_SECONDS must be between 15 and 3600.")
+        self.metadata = {}
 
     def search(self, term, subject, course):
         return ucla.find_sections(term, subject, course)
 
     def check(self, url):
-        return ucla.check(url)
+        from .combination import check_summary_combination
+
+        identity = ucla.validate_url(url)
+        cached = self.metadata.get(url)
+        if cached is None or time.monotonic() - cached[0] >= 3600:
+            detail = ucla.parse_detail(ucla.fetch(url), url)
+            listing = ucla.course_listing(identity["term_cd"], identity["subj_area_cd"], identity["crs_catlg_no"])
+            if len(self.metadata) >= 25:
+                self.metadata.pop(next(iter(self.metadata)))
+            self.metadata[url] = (time.monotonic(), detail, listing)
+        _, detail, listing = self.metadata[url]
+        return check_summary_combination(detail, listing)
 
 
 class WatchService:
@@ -63,6 +82,9 @@ class WatchService:
                 if "combination_status" not in json.loads(row["snapshot"]):
                     store.db.execute("UPDATE watches SET next_check_at=0 WHERE term=? AND class_id=?",
                                      (row["term"], row["class_id"]))
+            # A saved hourly deadline must not delay activation of a faster interval.
+            store.db.execute("UPDATE watches SET next_check_at=MIN(next_check_at, ?)",
+                             (self.clock() + self.source.interval,))
             store.db.commit()
 
     @contextmanager
@@ -76,10 +98,11 @@ class WatchService:
             store.close()
 
     def source_info(self):
-        return {"id": "ucla_public_detail", "label": self.source.label,
+        return {"id": "ucla_public_summary", "label": self.source.label,
                 "mode": self.source.mode, "realtime": False,
-                "refresh_interval_seconds": self.source.interval,
-                "notice": "Public section counts update hourly. Confirm current availability and eligibility in MyUCLA."}
+                "refresh_interval_seconds": getattr(self.source, "freshness", None),
+                "check_interval_seconds": self.source.interval,
+                "notice": getattr(self.source, "notice", "Public enrollment data may lag. Confirm eligibility in MyUCLA.")}
 
     def search(self, term, subject, course):
         key = (term, subject.strip().upper(), ucla.normalize_course(course))
@@ -158,7 +181,7 @@ class WatchService:
                                  (now, next_check, watch_id))
             except ucla.SourceError as exc:
                 failures = row["failures"] + 1
-                delay = max(300, self.source.interval) * min(2 ** min(failures - 1, 2), 4)
+                delay = max(15, self.source.interval) * min(2 ** min(failures - 1, 2), 4)
                 store.db.execute("UPDATE watches SET last_attempt_at=?, next_check_at=?, error=?, failures=? WHERE id=?",
                                  (now, self.clock() + delay, str(exc), failures, watch_id))
             store.db.commit()
@@ -205,7 +228,7 @@ class WatchService:
                     self.run_due()
                 except Exception:
                     logging.exception("Scheduled section check failed; retrying on the next worker pass")
-                self.stop_event.wait(15)
+                self.stop_event.wait(1)
         self.worker = threading.Thread(target=run, name="classrabbit-checker", daemon=True)
         self.worker.start()
 

@@ -5,58 +5,58 @@
   "class_id": "186827200",
   "source_mode": "controlled fixture built from a real public UCLA page",
   "iterations": 10,
-  "median_ms": 30.2,
-  "maximum_ms": 49.67,
+  "median_ms": 29.09,
+  "maximum_ms": 42.11,
   "samples": [
     {
       "iteration": 1,
-      "source_return_to_browser_assertion_ms": 27.67,
-      "refresh_request_to_browser_assertion_ms": 36.89
+      "source_return_to_browser_assertion_ms": 33.31,
+      "refresh_request_to_browser_assertion_ms": 44.48
     },
     {
       "iteration": 2,
-      "source_return_to_browser_assertion_ms": 27.89,
-      "refresh_request_to_browser_assertion_ms": 36.85
+      "source_return_to_browser_assertion_ms": 30.01,
+      "refresh_request_to_browser_assertion_ms": 42.3
     },
     {
       "iteration": 3,
-      "source_return_to_browser_assertion_ms": 26.81,
-      "refresh_request_to_browser_assertion_ms": 36.15
+      "source_return_to_browser_assertion_ms": 28.1,
+      "refresh_request_to_browser_assertion_ms": 40.83
     },
     {
       "iteration": 4,
-      "source_return_to_browser_assertion_ms": 31.52,
-      "refresh_request_to_browser_assertion_ms": 42.11
+      "source_return_to_browser_assertion_ms": 28.45,
+      "refresh_request_to_browser_assertion_ms": 43.26
     },
     {
       "iteration": 5,
-      "source_return_to_browser_assertion_ms": 24.73,
-      "refresh_request_to_browser_assertion_ms": 33.19
+      "source_return_to_browser_assertion_ms": 28.75,
+      "refresh_request_to_browser_assertion_ms": 38.2
     },
     {
       "iteration": 6,
-      "source_return_to_browser_assertion_ms": 28.87,
-      "refresh_request_to_browser_assertion_ms": 37.79
+      "source_return_to_browser_assertion_ms": 28.63,
+      "refresh_request_to_browser_assertion_ms": 37.09
     },
     {
       "iteration": 7,
-      "source_return_to_browser_assertion_ms": 31.95,
-      "refresh_request_to_browser_assertion_ms": 42.06
+      "source_return_to_browser_assertion_ms": 33.96,
+      "refresh_request_to_browser_assertion_ms": 44.67
     },
     {
       "iteration": 8,
-      "source_return_to_browser_assertion_ms": 33.8,
-      "refresh_request_to_browser_assertion_ms": 46.73
+      "source_return_to_browser_assertion_ms": 29.17,
+      "refresh_request_to_browser_assertion_ms": 37.2
     },
     {
       "iteration": 9,
-      "source_return_to_browser_assertion_ms": 49.67,
-      "refresh_request_to_browser_assertion_ms": 60.44
+      "source_return_to_browser_assertion_ms": 42.11,
+      "refresh_request_to_browser_assertion_ms": 52.12
     },
     {
       "iteration": 10,
-      "source_return_to_browser_assertion_ms": 31.78,
-      "refresh_request_to_browser_assertion_ms": 42.95
+      "source_return_to_browser_assertion_ms": 29.0,
+      "refresh_request_to_browser_assertion_ms": 38.61
     }
   ],
   "proves": "Required Dis 1A changes closed to open while lecture remains at 10 seats -> verified complete combination -> durable event -> visible Chromium alert.",

@@ -52,7 +52,8 @@ class SourceInfo(BaseModel):
     label: str
     mode: str
     realtime: bool
-    refresh_interval_seconds: int
+    refresh_interval_seconds: int | None
+    check_interval_seconds: int
     notice: str
 
 
@@ -83,7 +84,7 @@ def create_app(database=None, source=None, *, worker=True):
             app.state.service.stop()
 
     app = FastAPI(title="Classrabbit API", version="0.2.0", lifespan=lifespan,
-                  description="Single-user local enrollment tracker. Public UCLA section counts refresh hourly; this API does not make them real time.")
+                  description="Single-user local enrollment tracker. Complete section sets are checked every 30 seconds by default; underlying UCLA public-source freshness remains unverified.")
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=["localhost", "127.0.0.1", "testserver"])
 
     @app.middleware("http")
@@ -143,7 +144,7 @@ def create_app(database=None, source=None, *, worker=True):
 
     @app.post("/api/watchlist/{watch_id}/refresh", response_model=RefreshResult, tags=["Watchlist"])
     def refresh(watch_id: str, request: Request):
-        """Reuse an observation until the hourly source check is due. Failed checks retain the last good observation."""
+        """Reuse an observation until its next scheduled check. Failed checks retain the last good observation."""
         return request.app.state.service.refresh(watch_id)
 
     @app.delete("/api/watchlist/{watch_id}", status_code=204, tags=["Watchlist"])

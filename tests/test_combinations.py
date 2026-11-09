@@ -1,8 +1,10 @@
 from dataclasses import replace
 from pathlib import Path
+import json
 import re
 import tempfile
 import unittest
+from urllib.parse import parse_qs, urlsplit
 
 from classrabbit.combination import assess_combination
 from classrabbit.state import State
@@ -48,7 +50,8 @@ class CombinationTests(unittest.TestCase):
                 self.assertEqual(self.assess(children=children).combination_status, "unknown")
 
     def test_waitlist_is_not_a_seat_and_unknown_counts_fail_closed(self):
-        for status in ["Waitlist: 1 of 20 Taken", "Open", "Open 0 of 22 Enrolled 0 Spots Left", "Unexpected status"]:
+        for status in ["Waitlist: 1 of 20 Taken", "Open", "Open 0 of 22 Enrolled 0 Spots Left", "Unexpected status",
+                       "Open -1 of 22 Enrolled 1 Spots Left", "Open 22 of 22 Enrolled 1 Spots Left"]:
             children = re.sub(r'(<div class="statusColumn" id="186827001_186827200_ENGR0186W-status_data">).*?(</div>)',
                               lambda m: m[1] + status + m[2], CHILDREN, count=1, flags=re.S)
             self.assertNotEqual(self.assess(children=children).combination_status, "available")
@@ -80,3 +83,30 @@ class CombinationTests(unittest.TestCase):
                 self.assertFalse(state.record(self.assess(children=opened_discussion())))
             finally:
                 state.close()
+
+    def test_lecture_discussion_and_lab_must_all_have_seats(self):
+        # A synthetic extra required level uses the captured UCLA row format.
+        listing = LISTING.replace('"SequenceNumber":"1"', '"SequenceNumber":"2"')
+        listing = listing.replace("(2) a Discussion.", "(2) a Discussion; (3) a Laboratory.")
+        discussions = opened_discussion().replace('"SequenceNumber":"0"', '"SequenceNumber":"1"')
+        start = CHILDREN.index('<div class="row-fluid data_row')
+        end = CHILDREN.index('<div class="row-fluid data_row', start + 1)
+        leaf = CHILDREN[start:end].replace("186827001", "186827501")
+        leaf = leaf.replace("186827501_186827200_ENGR0186W", "186827501_186827001_186827200_ENGR0186W")
+        leaf = leaf.replace("Dis 1A", "Lab 1A")
+
+        for lab_open in [False, True]:
+            def fetch(url):
+                model = json.loads(parse_qs(urlsplit(url).query)["model"][0])
+                if model["SequenceNumber"] == "2":
+                    return discussions
+                markup = leaf
+                if lab_open:
+                    markup = re.sub(r'(<div class="statusColumn" id="186827501_[^"]+-status_data">).*?(</div>)',
+                                    r'\1<p>Open<br/>21 of 22 Enrolled<br/>1 Spots Left</p>\2', markup, count=1, flags=re.S)
+                return '<div id="' + model["Path"] + '-children">' + markup + '</div>'
+
+            result = assess_combination(self.lecture, listing, fetch)
+            with self.subTest(lab_open=lab_open):
+                self.assertEqual(result.combination_status, "available" if lab_open else "blocked")
+                self.assertEqual(result.open_combinations, [["186827200", "186827001", "186827501"]] if lab_open else [])
