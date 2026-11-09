@@ -47,6 +47,15 @@ class Section(BaseModel):
     url: str
 
 
+class SafetyInfo(BaseModel):
+    minimum_request_gap_seconds: int
+    pause_reason: str | None
+    cooldown_until: float
+    next_request_at: float
+    rate_limit_responses: int
+    university_approved_quota: bool
+
+
 class SourceInfo(BaseModel):
     id: str
     label: str
@@ -56,6 +65,7 @@ class SourceInfo(BaseModel):
     check_interval_seconds: int
     notice: str
     session_status: str | None = None
+    safety: SafetyInfo | None = None
 
 
 class SearchResult(BaseModel):
@@ -118,6 +128,19 @@ def create_app(database=None, source=None, *, worker=True):
     @app.get("/api/source", response_model=SourceInfo, tags=["Status"])
     def source_info(request: Request):
         return request.app.state.service.source_info()
+
+    @app.post("/api/source/resume", response_model=SourceInfo, tags=["Status"])
+    def resume_sign_in(request: Request):
+        service = request.app.state.service
+        resume = getattr(service.source, "resume_sign_in", None)
+        if resume is None:
+            raise HTTPException(409, "This source has no sign-in pause to resume.")
+        with service.lock:
+            try:
+                resume()
+            except SourceError as exc:
+                raise HTTPException(409, str(exc)) from exc
+        return service.source_info()
 
     @app.get("/api/sections", response_model=SearchResult, tags=["Courses"], responses={502: {"description": "Upstream source unavailable or unrecognized"}})
     def sections(request: Request,

@@ -101,6 +101,7 @@ class WatchService:
         return {"id": getattr(self.source, "id", "ucla_public_summary"), "label": self.source.label,
                 "mode": self.source.mode, "realtime": False,
                 "session_status": getattr(self.source, "session_status", None),
+                "safety": getattr(self.source, "safety_status", None),
                 "refresh_interval_seconds": getattr(self.source, "freshness", None),
                 "check_interval_seconds": self.source.interval,
                 "notice": getattr(self.source, "notice", "Public enrollment data may lag. Confirm eligibility in MyUCLA.")}
@@ -125,12 +126,16 @@ class WatchService:
         snapshot = json.loads(observation[0]) if observation else None
         query = parse_qs(urlsplit(row["source_url"]).query)
         fallback = query["subj_area_cd"][0].strip() + " " + query["crs_catlg_no"][0].strip().lstrip("0")
-        stale = snapshot is None or bool(row["error"])
+        error = row["error"]
+        safety = getattr(self.source, "safety_status", None)
+        if safety and (safety["pause_reason"] or self.clock() < safety["cooldown_until"]):
+            error = error or "Source checks are paused; availability is unverified."
+        stale = snapshot is None or bool(error)
         if snapshot:
             stale = stale or self.clock() - datetime.fromisoformat(snapshot["checked_at"]).timestamp() >= max(self.source.interval, 1)
         return {"id": row["id"], "term": row["term"], "class_id": row["class_id"],
                 "label": snapshot["course"] if snapshot else fallback,
-                "snapshot": snapshot, "error": row["error"], "stale": stale,
+                "snapshot": snapshot, "error": error, "stale": stale,
                 "failures": row["failures"], "added_at": iso(row["added_at"]),
                 "last_attempt_at": iso(row["last_attempt_at"]) if row["last_attempt_at"] is not None else None,
                 "next_check_at": iso(row["next_check_at"])}
@@ -186,8 +191,9 @@ class WatchService:
             except ucla.SourceError as exc:
                 failures = row["failures"] + 1
                 delay = max(15, self.source.interval) * min(2 ** min(failures - 1, 2), 4)
+                next_check = max(self.clock() + delay, getattr(exc, "retry_at", 0))
                 store.db.execute("UPDATE watches SET last_attempt_at=?, next_check_at=?, error=?, failures=? WHERE id=?",
-                                 (now, self.clock() + delay, str(exc), failures, watch_id))
+                                 (now, next_check, str(exc), failures, watch_id))
             store.db.commit()
             updated = store.db.execute("SELECT * FROM watches WHERE id=?", (watch_id,)).fetchone()
             if reopened:

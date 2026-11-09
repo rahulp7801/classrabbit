@@ -171,11 +171,37 @@ function renderDashboard() {
 }
 
 async function loadDashboard() {
-  const data = await Promise.all([api("/api/watchlist"), api("/api/events")]);
+  const data = await Promise.all([api("/api/watchlist"), api("/api/events"), api("/api/source")]);
   watches = data[0];
   events = data[1];
+  renderSource(data[2]);
   renderDashboard();
 }
+
+function renderSource(source) {
+  $("#fixture-banner").hidden = source.mode === "live";
+  $("#source-mode").textContent = source.mode === "live" ? source.label : "Simulated source";
+  const seconds = source.check_interval_seconds;
+  const safety = source.safety;
+  const paused = safety && (safety.pause_reason || safety.cooldown_until * 1000 > Date.now());
+  $("#source-heading").textContent = paused ? "MyUCLA checks paused" : `${source.id === "ucla_myucla" ? "MyUCLA" : "Public schedule"} · ${seconds < 60 ? seconds + "-second" : Math.round(seconds / 60) + "-minute"} checks`;
+  let message = source.notice;
+  if (safety?.pause_reason === "sign_in_required") message = "Checks stopped. Complete UCLA sign-in and Duo in the dedicated browser, then resume here.";
+  else if (safety?.pause_reason) message = `Checks stopped (${safety.pause_reason.replaceAll("_", " ")}). Resolve access or safety issues before continuing. Availability is unverified.`;
+  else if (paused) message = `No requests during cooldown. Earliest retry: ${formattedTime(new Date(safety.cooldown_until * 1000).toISOString())}. Availability is unverified.`;
+  $("#source-description").textContent = message;
+  $("#resume-source").hidden = safety?.pause_reason !== "sign_in_required";
+}
+
+$("#resume-source").addEventListener("click", async () => {
+  const button = $("#resume-source");
+  button.disabled = true;
+  try {
+    renderSource(await api("/api/source/resume", { method: "POST" }));
+    toast("Sign-in pause cleared. The next scheduled check will verify your session.");
+  } catch (error) { toast(error.message, true); }
+  finally { button.disabled = false; }
+});
 
 async function addWatch(url, button) {
   button.disabled = true;
@@ -348,12 +374,7 @@ async function bootstrap() {
     }
   }
   try {
-    const [source] = await Promise.all([api("/api/source"), loadDashboard()]);
-    $("#fixture-banner").hidden = source.mode === "live";
-    $("#source-mode").textContent = source.mode === "live" ? source.label : "Simulated source";
-    const seconds = source.check_interval_seconds;
-    $("#source-heading").textContent = `${source.id === "ucla_myucla" ? "MyUCLA" : "Public schedule"} · ${seconds < 60 ? seconds + "-second" : Math.round(seconds / 60) + "-minute"} checks`;
-    $("#source-description").textContent = source.notice;
+    await loadDashboard();
     connectAlerts();
   } catch (error) {
     toast(error.message, true);

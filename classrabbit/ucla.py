@@ -111,21 +111,33 @@ class PublicRedirects(HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
-def fetch(url):
+def fetch(url, *, safety=None, stop_event=None):
+    if safety:
+        safety.acquire(stop_event)
     request = Request(url, headers={
         "User-Agent": "Classrabbit-Feasibility/0.1 (read-only public schedule checker)",
         "Accept": "text/html, application/json",
         "X-Requested-With": "XMLHttpRequest",
     })
     try:
-        with build_opener(PublicRedirects()).open(request, timeout=25) as response:
+        class NoRedirects(HTTPRedirectHandler):
+            def redirect_request(self, req, fp, code, msg, headers, newurl):
+                return None
+        redirects = NoRedirects() if safety else PublicRedirects()
+        with build_opener(redirects).open(request, timeout=25) as response:
+            if safety:
+                safety.response(response.status, response.headers.get("Retry-After"))
             content = response.read(2_000_001)
             if len(content) > 2_000_000:
                 raise SourceError("Unexpectedly large source response.")
             return content.decode(response.headers.get_content_charset() or "utf-8")
     except HTTPError as exc:
+        if safety:
+            safety.response(exc.code, exc.headers.get("Retry-After"))
         raise SourceError(f"UCLA returned HTTP {exc.code}; availability is unknown.") from exc
     except (URLError, TimeoutError, UnicodeError, OSError) as exc:
+        if safety:
+            safety.response(503)
         raise SourceError(f"Could not read UCLA's public schedule: {exc}") from exc
 
 
@@ -225,14 +237,14 @@ def normalize_course(course):
     return str(int(match[1])) + match[2]
 
 
-def find_sections(term, subject, course):
+def find_sections(term, subject, course, fetcher=None):
     """Find numeric or suffixed catalog courses; prefixed codes use an exact URL."""
     if not re.fullmatch(r"\d{2}[FWS12]", term):
         raise SourceError("Use a term such as 27W.")
     normalized = normalize_course(course)
     digits, suffix = re.fullmatch(r"(\d+)([A-Z]*)", normalized).groups()
     catalog = (digits.zfill(4) + suffix).ljust(8)
-    markup = course_listing(term, subject, catalog)
+    markup = course_listing(term, subject, catalog, fetcher=fetcher)
     doc = Document(markup)
     result = {}
     for node in doc.root.all():
@@ -250,7 +262,7 @@ def find_sections(term, subject, course):
     return list(result.values())
 
 
-def course_listing(term, subject, catalog):
+def course_listing(term, subject, catalog, fetcher=None):
     model = {"subj_area_cd": subject.upper().strip(), "crs_catlg_no": catalog,
              "search_by": "Subject", "term_cd": term, "ActiveEnrollmentFlag": "n", "HasData": "False"}
     flags = dict.fromkeys(["enrollment_status", "meet_days", "start_time", "end_time", "meet_locations",
@@ -260,7 +272,7 @@ def course_listing(term, subject, catalog):
     url = BASE + "Results/GetCourseTitlesPage?" + urlencode({
         "search_by": "subject", "model": json.dumps(model), "filterFlags": json.dumps(flags), "isFilter": "false"})
     try:
-        data = json.loads(fetch(url))
+        data = json.loads((fetcher or fetch)(url))
         markup = data["ClassPartialViewData"]
         if not isinstance(markup, str):
             raise ValueError("Missing listing markup")

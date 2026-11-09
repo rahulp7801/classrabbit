@@ -4,7 +4,7 @@ A local UCLA enrollment tracker with a browser interface, FastAPI HTTP API, SQLi
 
 **The app checks complete section combinations every 30 seconds by default and streams detected openings to an open browser. UCLA's underlying public-source update delay remains unverified, so an instant alert after a real seat drop is not guaranteed.** The existing ClassRabbit service's private data source is unknown.
 
-For signed-in MyUCLA access, run **`python -m classrabbit.server --source myucla`**. This uses authenticated counts with a two-second target check cadence and a separate local database. See [read-only MyUCLA setup](docs/MYUCLA_READ_ONLY.md). Authentication requires the user's local sign-in; it is not a new campus API permission. Account-derived observations and browser evidence stay in the Git-ignored local directory.
+For signed-in MyUCLA access, run **`python -m classrabbit.server --source myucla`**. This uses authenticated counts with a 30-second target check cadence and a separate local database. All adapter reads share a minimum 10-second request gap, with persistent cooldowns and access stops. These application limits are not a UCLA-approved quota and do not guarantee immediate detection or prevent all rate limits. See [read-only MyUCLA setup](docs/MYUCLA_READ_ONLY.md). Authentication requires the user's local sign-in; it is not a new campus API permission. Account-derived observations and browser evidence stay in the Git-ignored local directory.
 
 ## Start the app
 

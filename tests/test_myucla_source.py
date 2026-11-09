@@ -53,7 +53,7 @@ class MyUCLASourceTests(unittest.TestCase):
         with patch("classrabbit.ucla.fetch", side_effect=fetch):
             source = MyUCLASource(reader)
             snapshot = source.check(ENGR_URL)
-        self.assertEqual(source.interval, 2)
+        self.assertEqual(source.interval, 30)
         self.assertEqual((snapshot.status, snapshot.available, snapshot.capacity), ("closed", 0, 100))
         self.assertEqual(snapshot.combination_status, "blocked")
         self.assertEqual(snapshot.source, "ucla_myucla")

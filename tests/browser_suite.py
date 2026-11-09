@@ -163,6 +163,38 @@ def unavailable_source_and_disconnect(page, url, source, clock, suffix):
     expect(page.get_by_role("button", name="Refresh list", exact=False)).to_be_enabled()
 
 
+def safety_pause_and_resume(page, url, source, clock, suffix):
+    source.id = "ucla_myucla"
+    source.interval = 30
+    source.session_status = "sign_in_required"
+    source.safety_status = {"minimum_request_gap_seconds": 10, "pause_reason": "sign_in_required",
+                            "cooldown_until": 0, "next_request_at": 0,
+                            "rate_limit_responses": 0, "university_approved_quota": False}
+
+    def resume():
+        source.safety_status["pause_reason"] = None
+        source.session_status = "active"
+
+    source.resume_sign_in = resume
+    page.goto(url)
+    expect(page.locator("#source-heading")).to_have_text("MyUCLA checks paused")
+    expect(page.locator("#source-description")).to_contain_text("Complete UCLA sign-in")
+    page.get_by_role("button", name="I've signed in").click()
+    expect(page.locator("#source-heading")).to_have_text("MyUCLA · 30-second checks")
+    expect(page.locator("#resume-source")).to_be_hidden()
+    source.safety_status["pause_reason"] = "access_denied"
+    page.get_by_role("button", name="Refresh list", exact=False).click()
+    expect(page.locator("#source-heading")).to_have_text("MyUCLA checks paused")
+    expect(page.locator("#source-description")).to_contain_text("access denied")
+    expect(page.locator("#resume-source")).to_be_hidden()
+    source.safety_status["pause_reason"] = None
+    source.safety_status["cooldown_until"] = time.time() + 900
+    page.get_by_role("button", name="Refresh list", exact=False).click()
+    expect(page.locator("#source-description")).to_contain_text("No requests during cooldown")
+    expect(page.locator("#resume-source")).to_be_hidden()
+    page.screenshot(path=str(ARTIFACTS / f"safety-hold-{suffix}.png"), full_page=True)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--iterations", type=int, default=3)
@@ -170,7 +202,7 @@ def main():
     if not 1 <= args.iterations <= 20:
         parser.error("Choose between 1 and 20 iterations")
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
-    scenarios = [lifecycle, validation_and_errors, mobile_and_filters, unavailable_source_and_disconnect]
+    scenarios = [lifecycle, validation_and_errors, mobile_and_filters, unavailable_source_and_disconnect, safety_pause_and_resume]
     total = 0
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
