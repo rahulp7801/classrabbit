@@ -4,7 +4,7 @@
 
 The application now pushes a detected reopening to connected browsers using a server-sent event. It no longer waits for the browser's 30-second dashboard refresh to show that alert. Reopening events are persisted before publication; repeated open observations do not generate another event. Reconnecting browsers can request replay after their last event ID.
 
-The controlled ENGR 186W test ran ten closed-to-one-seat-open transitions through a real local FastAPI server, SQLite state, the event stream, and real Playwright Chromium. From the test source adapter returning an opening to the browser visibly displaying its alert, the measured median was **33.81 ms**, with a maximum of **39.30 ms**. These measurements include the automation assertion overhead and apply to this local run, not a deployment latency guarantee.
+The controlled ENGR 186W test ran ten closed-to-one-seat-open transitions through a real local FastAPI server, SQLite state, the event stream, and real Playwright Chromium. From the test source adapter returning an opening to the browser visibly displaying its alert, the measured median was **30.20 ms**, with a maximum of **49.67 ms**. These measurements include the automation assertion overhead and apply to this local run, not a deployment latency guarantee.
 
 **Those transitions were simulated. No UCLA enrollment was changed. This does not prove the time between an actual dropped seat and UCLA publishing that change. No phone notifications were configured or sent.**
 
@@ -13,7 +13,7 @@ The controlled ENGR 186W test ran ten closed-to-one-seat-open transitions throug
 - Reproduce: `python -m tests.immediate_proof --iterations 10`
 - Raw trace: `.local/immediate-proof/trace.zip`
 
-The test uses a captured public response for the real section's identity and metadata, then controls only the availability and test clock. It triggers a source check through the real refresh API; the browser receives an unsolicited event without clicking Refresh. There are no production endpoints for injecting fake seat counts.
+The test uses a captured public response for the real section's identity and metadata, then keeps the lecture at 10 seats and controls the first discussion?s availability and the test clock. The real linked-section parser evaluates all six discussions before any event is emitted. It triggers a source check through the real refresh API; the browser receives an unsolicited event without clicking Refresh. There are no production endpoints for injecting fake seat counts.
 
 ## Exact requested class
 
@@ -70,3 +70,7 @@ Only the application event-delivery portion has a controlled sub-second measurem
 Phone setup was deferred at the user's request. For a later implementation, [Pushover's API](https://pushover.net/api) supports a message with an enrollment link and priority. [ntfy](https://docs.ntfy.sh/subscribe/phone/) is another option with platform-specific delivery behavior. Neither service can compensate for a stale UCLA source, and neither provides an absolute guarantee that a device will display every message immediately.
 
 The current event stream is an **in-app alert while the page is open**, not an OS push notification or a background phone alert. The browser displays whether that connection is active.
+
+## Linked-section correction
+
+The earlier lecture-only report was insufficient. The captured ENGR 186W data has five full discussions (1A?1E) and one discussion closed by the department (1F). The app now shows this as no complete seat combination. A discussion opening with the lecture still at 10 seats produces an event; a lecture-only opening does not. Legacy lecture-only events are labeled historical and are not streamed as new combination alerts.

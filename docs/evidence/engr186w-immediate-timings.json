@@ -5,60 +5,60 @@
   "class_id": "186827200",
   "source_mode": "controlled fixture built from a real public UCLA page",
   "iterations": 10,
-  "median_ms": 33.81,
-  "maximum_ms": 39.3,
+  "median_ms": 30.2,
+  "maximum_ms": 49.67,
   "samples": [
     {
       "iteration": 1,
-      "source_return_to_browser_assertion_ms": 37.33,
-      "refresh_request_to_browser_assertion_ms": 43.0
+      "source_return_to_browser_assertion_ms": 27.67,
+      "refresh_request_to_browser_assertion_ms": 36.89
     },
     {
       "iteration": 2,
-      "source_return_to_browser_assertion_ms": 33.53,
-      "refresh_request_to_browser_assertion_ms": 40.93
+      "source_return_to_browser_assertion_ms": 27.89,
+      "refresh_request_to_browser_assertion_ms": 36.85
     },
     {
       "iteration": 3,
-      "source_return_to_browser_assertion_ms": 32.67,
-      "refresh_request_to_browser_assertion_ms": 40.49
+      "source_return_to_browser_assertion_ms": 26.81,
+      "refresh_request_to_browser_assertion_ms": 36.15
     },
     {
       "iteration": 4,
-      "source_return_to_browser_assertion_ms": 33.01,
-      "refresh_request_to_browser_assertion_ms": 40.77
+      "source_return_to_browser_assertion_ms": 31.52,
+      "refresh_request_to_browser_assertion_ms": 42.11
     },
     {
       "iteration": 5,
-      "source_return_to_browser_assertion_ms": 34.45,
-      "refresh_request_to_browser_assertion_ms": 42.84
+      "source_return_to_browser_assertion_ms": 24.73,
+      "refresh_request_to_browser_assertion_ms": 33.19
     },
     {
       "iteration": 6,
-      "source_return_to_browser_assertion_ms": 32.73,
-      "refresh_request_to_browser_assertion_ms": 39.38
+      "source_return_to_browser_assertion_ms": 28.87,
+      "refresh_request_to_browser_assertion_ms": 37.79
     },
     {
       "iteration": 7,
-      "source_return_to_browser_assertion_ms": 39.3,
-      "refresh_request_to_browser_assertion_ms": 46.94
+      "source_return_to_browser_assertion_ms": 31.95,
+      "refresh_request_to_browser_assertion_ms": 42.06
     },
     {
       "iteration": 8,
-      "source_return_to_browser_assertion_ms": 34.09,
-      "refresh_request_to_browser_assertion_ms": 41.63
+      "source_return_to_browser_assertion_ms": 33.8,
+      "refresh_request_to_browser_assertion_ms": 46.73
     },
     {
       "iteration": 9,
-      "source_return_to_browser_assertion_ms": 36.13,
-      "refresh_request_to_browser_assertion_ms": 43.44
+      "source_return_to_browser_assertion_ms": 49.67,
+      "refresh_request_to_browser_assertion_ms": 60.44
     },
     {
       "iteration": 10,
-      "source_return_to_browser_assertion_ms": 32.76,
-      "refresh_request_to_browser_assertion_ms": 40.0
+      "source_return_to_browser_assertion_ms": 31.78,
+      "refresh_request_to_browser_assertion_ms": 42.95
     }
   ],
-  "proves": "Detected opening -> durable event -> server-sent event -> visible Chromium in-app alert.",
+  "proves": "Required Dis 1A changes closed to open while lecture remains at 10 seats -> verified complete combination -> durable event -> visible Chromium alert.",
   "does_not_prove": "Time from an actual UCLA seat drop to an observable source update, or phone delivery."
 }

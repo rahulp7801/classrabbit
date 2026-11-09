@@ -60,6 +60,15 @@ function courseParts(item) {
   return match ? { code: match[1], title: match[2] } : { code: "UCLA", title: full };
 }
 
+function completeSet(snapshot) {
+  return snapshot?.combination_status === "available" && snapshot.open_combinations?.length > 0;
+}
+
+function combinationLabel(snapshot) {
+  const ids = snapshot?.open_combinations?.[0] || [];
+  return [snapshot?.section, ...ids.slice(1).map(id => snapshot.linked_sections.find(s => s.class_id === id)?.section || id)].filter(Boolean).join(" + ");
+}
+
 function safeLink(label, url, className = "") {
   const node = el("a", className, label);
   node.href = url;
@@ -76,26 +85,44 @@ function openSearch() {
 function renderCard(item) {
   const snapshot = item.snapshot;
   const parts = courseParts(item);
-  const status = item.error || !snapshot ? "unknown" : snapshot.status;
+  const status = item.error || !snapshot || snapshot.combination_status === "unknown" ? "unknown" : completeSet(snapshot) ? "open" : "closed";
   const card = el("article", "watch-card");
   card.dataset.testid = "watch-card";
   card.dataset.watchId = item.id;
   const top = el("div", "card-top");
-  top.append(el("span", "course-code", parts.code), el("span", `status-badge ${status}`, status === "unknown" ? "Availability unknown" : `${item.stale ? "Last report · " : ""}${status[0].toUpperCase()}${status.slice(1)}`));
+  top.append(el("span", "course-code", parts.code), el("span", `status-badge ${status}`, status === "unknown" ? "Complete set unverified" : status === "open" ? "Complete set reported open" : "No complete seat combination"));
   const heading = el("h2", "", parts.title);
   const section = el("p", "section-meta", `${snapshot?.section || "Section"} · ${item.term} · Class ID ${item.class_id}`);
   const seats = el("div", "seats-line");
-  seats.append(el("span", `seat-count ${status}`, status === "unknown" || snapshot?.available == null ? "—" : String(snapshot.available)), document.createTextNode(snapshot?.capacity && status !== "unknown" ? `of ${snapshot.capacity} seats left` : "seats available · unconfirmed"));
+  seats.append(el("span", `seat-count ${status}`, item.error || snapshot?.available == null ? "—" : String(snapshot.available)), document.createTextNode(snapshot?.capacity && !item.error ? `of ${snapshot.capacity} seats left in ${snapshot.section}` : "section seats · unconfirmed"));
   const track = el("div", "progress-track");
   const fill = el("div", "progress-fill");
   fill.style.width = `${snapshot?.capacity && status !== "unknown" ? Math.min(100, (snapshot.available || 0) / snapshot.capacity * 100) : 0}%`;
   track.append(fill);
   card.append(top, heading, section, seats, track);
+  if (snapshot) card.append(el("p", "card-note combination-reason", snapshot.combination_reason));
+  if (snapshot?.linked_sections?.length) {
+    const linked = snapshot.linked_sections;
+    const details = el("details", "linked-sections");
+    details.open = status !== "open";
+    const positive = linked.filter(s => s.status === "open" && s.available > 0).length;
+    details.append(el("summary", "", `Required linked sections: ${positive} of ${linked.length} report seats`));
+    const list = el("ul", "linked-section-list");
+    for (const child of linked) {
+      const row = el("li");
+      row.dataset.testid = "linked-section";
+      row.append(el("strong", "", child.section), el("span", "", child.status === "open" ? `${child.available} seats reported` : child.status),
+        el("small", "", [child.days, child.time].filter(Boolean).join(" · ")));
+      list.append(row);
+    }
+    details.append(list);
+    card.append(details);
+  }
   if (item.error) {
     const error = el("p", "card-note error", `Check failed: ${item.error}`);
     error.setAttribute("role", "status");
     card.append(error);
-    if (snapshot) card.append(el("p", "card-note", `Previous successful report: ${snapshot.status}, ${snapshot.available ?? "unknown"} seats left. This is historical data.`));
+    if (snapshot) card.append(el("p", "card-note", `Previous successful report: section ${snapshot.status}, ${snapshot.available ?? "unknown"} seats left; complete set ${snapshot.combination_status}. This is historical data.`));
   }
   card.append(el("p", "card-note", `Last successful check: ${formattedTime(snapshot?.checked_at)}`));
   if (snapshot) {
@@ -121,9 +148,9 @@ function renderDashboard() {
   $("#nav-count").textContent = String(watches.length);
   $("#total-count").textContent = String(watches.length);
   $("#filter-total").textContent = String(watches.length);
-  $("#open-count").textContent = String(watches.filter(w => !w.error && w.snapshot?.status === "open").length);
-  $("#closed-count").textContent = String(watches.filter(w => !w.error && ["closed", "waitlist"].includes(w.snapshot?.status)).length);
-  const visible = watches.filter(w => selectedFilter === "all" || (selectedFilter === "open" ? !w.error && w.snapshot?.status === "open" : !w.error && ["closed", "waitlist"].includes(w.snapshot?.status)));
+  $("#open-count").textContent = String(watches.filter(w => !w.error && completeSet(w.snapshot)).length);
+  $("#closed-count").textContent = String(watches.filter(w => !w.error && w.snapshot?.combination_status === "blocked").length);
+  const visible = watches.filter(w => selectedFilter === "all" || (selectedFilter === "open" ? !w.error && completeSet(w.snapshot) : !w.error && w.snapshot?.combination_status === "blocked"));
   $("#watch-cards").replaceChildren(...visible.map(renderCard));
   $("#empty-state").hidden = watches.length !== 0;
   $("#no-filter-results").hidden = watches.length === 0 || visible.length > 0;
@@ -134,8 +161,9 @@ function renderDashboard() {
     row.dataset.testid = "reopening-event";
     const copy = el("div");
     const parts = courseParts({ snapshot: event.snapshot });
-    copy.append(el("strong", "", `${parts.code} · ${event.snapshot.section} reopened`),
-      el("p", "", `${event.snapshot.available} seats reported available · ${formattedTime(event.observed_at)}`));
+    const verified = completeSet(event.snapshot);
+    copy.append(el("strong", "", verified ? `${parts.code} · ${combinationLabel(event.snapshot)} reported available` : `${parts.code} · historical lecture-only report`),
+      el("p", "", verified ? `Complete required section set · ${formattedTime(event.observed_at)}` : `Linked sections were not checked for this older event · ${formattedTime(event.observed_at)}`));
     row.append(el("span", "event-icon", "↗"), copy, safeLink("MyUCLA ↗", event.snapshot.enrollment_url));
     return row;
   }));
@@ -174,7 +202,7 @@ async function refreshWatch(id, button) {
     const result = await api(`/api/watchlist/${id}/refresh`, { method: "POST" });
     await loadDashboard();
     if (result.watch.error) toast("Availability is unknown. The previous report is preserved; a retry is scheduled.", true);
-    else if (result.reopened) toast("A seat opening was reported. Check MyUCLA to confirm and enroll.");
+    else if (result.reopened) toast(`A seat opening was reported for a complete section set: ${combinationLabel(result.watch.snapshot)}. Confirm in MyUCLA.`);
     else if (result.cached) toast(`Already checked. Next source check: ${formattedTime(result.watch.next_check_at)}.`);
     else toast("Section checked. No new reopening was detected.");
   } catch (error) {
@@ -221,8 +249,9 @@ function connectAlerts() {
     const event = JSON.parse(message.data);
     if (event.id <= lastAlertId) return;
     lastAlertId = event.id;
+    if (!completeSet(event.snapshot)) return;
     const parts = courseParts({ snapshot: event.snapshot });
-    toast(`A seat opening was reported: ${parts.code} ${event.snapshot.section}. Check MyUCLA to confirm and enroll.`);
+    toast(`A seat opening was reported: ${parts.code} ${combinationLabel(event.snapshot)}. Confirm in MyUCLA.`);
     $("#toast").dataset.eventId = String(event.id);
     loadDashboard().catch(error => toast(error.message, true));
   });

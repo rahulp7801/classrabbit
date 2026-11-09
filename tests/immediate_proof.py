@@ -11,10 +11,12 @@ import json
 from pathlib import Path
 import statistics
 import time
+import re
 
 from playwright.sync_api import expect, sync_playwright
 
 from classrabbit.ucla import SourceError, parse_detail
+from classrabbit.combination import assess_combination
 from tests.browser_suite import server
 from tests.support import FixtureSource
 
@@ -35,9 +37,13 @@ class EngrSource(FixtureSource):
         self.check_calls += 1
         markup = (Path(__file__).parent / "fixtures" / "ucla_engr186w_detail.html").read_text(encoding="utf-8")
         snapshot = parse_detail(markup, ENGR_URL)
-        result = replace(snapshot, source_url=url, status=self.status,
-                         available=1 if self.status == "open" else 0,
-                         checked_at=datetime.fromtimestamp(self.clock(), timezone.utc).isoformat())
+        snapshot = replace(snapshot, source_url=url, checked_at=datetime.fromtimestamp(self.clock(), timezone.utc).isoformat())
+        listing = (Path(__file__).parent / "fixtures" / "ucla_engr186w_listing.html").read_text(encoding="utf-8")
+        children = (Path(__file__).parent / "fixtures" / "ucla_engr186w_children.html").read_text(encoding="utf-8")
+        if self.status == "open":
+            children = re.sub(r'(<div class="statusColumn" id="186827001_186827200_ENGR0186W-status_data">).*?(</div>)',
+                              r'\1<p>Open<br/>21 of 22 Enrolled<br/>1 Spots Left</p>\2', children, count=1, flags=re.S)
+        result = assess_combination(snapshot, listing, lambda _url: children)
         self.returned_at = time.perf_counter()
         return result
 
@@ -71,7 +77,9 @@ def main():
             expect(page.locator(".search-result")).to_have_count(1)
             page.get_by_role("button", name="Watch section", exact=True).click()
             expect(page.get_by_test_id("watch-card")).to_contain_text("ENGR 186W")
-            expect(page.get_by_test_id("watch-card")).to_contain_text("Closed")
+            expect(page.get_by_test_id("watch-card")).to_contain_text("No complete seat combination")
+            expect(page.locator(".seat-count")).to_have_text("10")
+            expect(page.get_by_test_id("linked-section")).to_have_count(6)
             item = context.request.get(url + "/api/watchlist").json()[0]
             refresh_url = f"{url}/api/watchlist/{item['id']}/refresh"
             for index in range(1, args.iterations + 1):
@@ -89,6 +97,8 @@ def main():
                 expect(page.locator("#toast")).to_be_visible()
                 observed = time.perf_counter()
                 expect(page.locator("#toast")).to_contain_text("ENGR 186W Lec 1")
+                expect(page.locator("#toast")).to_contain_text("Dis 1A")
+                expect(page.locator(".seat-count")).to_have_text("10")
                 samples.append({"iteration": index,
                                 "source_return_to_browser_assertion_ms": round((observed - source.returned_at) * 1000, 2),
                                 "refresh_request_to_browser_assertion_ms": round((observed - started) * 1000, 2)})
@@ -105,7 +115,7 @@ def main():
                       "source_mode": "controlled fixture built from a real public UCLA page",
                       "iterations": args.iterations, "median_ms": round(statistics.median(elapsed), 2),
                       "maximum_ms": max(elapsed), "samples": samples,
-                      "proves": "Detected opening -> durable event -> server-sent event -> visible Chromium in-app alert.",
+                      "proves": "Required Dis 1A changes closed to open while lecture remains at 10 seats -> verified complete combination -> durable event -> visible Chromium alert.",
                       "does_not_prove": "Time from an actual UCLA seat drop to an observable source update, or phone delivery."}
             (folder / "timings.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
             page.screenshot(path=str(folder / "engr186w-controlled-alert.png"), full_page=True)

@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 import time
 
-from classrabbit.ucla import SourceError, parse_detail, validate_url
+from classrabbit.ucla import LinkedSection, SourceError, parse_detail, validate_url
 
 URL = ("https://sa.ucla.edu/ro/Public/SOC/Results/ClassDetail?term_cd=27W"
        "&subj_area_cd=COM%20SCI&crs_catlg_no=0031%20%20%20%20"
@@ -51,7 +51,14 @@ class FixtureSource:
             raise SourceError("Simulated UCLA outage; retry later.")
         identity = validate_url(url)
         baseline = parse_detail(FIXTURE, URL)
+        is_open = self.status == "open"
+        linked_id = "187093001" if identity["class_id"] == "187093200" else "187093011"
+        linked = LinkedSection(linked_id, identity["class_id"], "Dis 1A", "discussion", self.status,
+                               1 if is_open else 0, 30, url.replace(identity["class_id"], linked_id), False)
         return replace(baseline, term=identity["term_cd"], class_id=identity["class_id"], source_url=url,
                        section="Lec 1" if identity["class_id"] == "187093200" else "Lec 2",
                        status=self.status, available=2 if self.status == "open" else 0,
+                       combination_status="available" if is_open else "blocked",
+                       combination_reason="A complete section set reports seats." if is_open else "No complete seat combination is available.",
+                       linked_sections=[linked], open_combinations=[[identity["class_id"], linked_id]] if is_open else [],
                        checked_at=datetime.fromtimestamp(self.clock(), timezone.utc).isoformat())

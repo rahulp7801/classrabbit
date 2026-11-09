@@ -57,10 +57,13 @@ def main(argv=None):
                     print(f"{snapshot.course} | {snapshot.section} | ID {snapshot.class_id}")
                     print(f"Status: {snapshot.status}; seats left: {snapshot.available}; capacity: {snapshot.capacity}")
                     print(f"Waitlist: {snapshot.waitlist}\nRestrictions: {snapshot.restrictions}")
+                    print(f"Complete seat combination: {snapshot.combination_status}\n{snapshot.combination_reason}")
+                    for section in snapshot.linked_sections:
+                        print(f"  {section.section}: {section.status}; seats left: {section.available}")
                     print(f"Fetched at: {snapshot.checked_at}\nSource notice: {snapshot.source_notice}")
                     print("Public cached source; confirm eligibility and current availability in MyUCLA.")
                     if reopened:
-                        print(f"REOPENED since the previous successful check: {snapshot.enrollment_url}")
+                        print(f"COMPLETE SECTION SET OPENED since the previous verified check: {snapshot.enrollment_url}")
                     print(flush=True)
             except SourceError as exc:
                 print(f"Availability unknown: {exc} Last successful observation preserved.", file=sys.stderr, flush=True)

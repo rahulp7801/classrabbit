@@ -89,8 +89,8 @@ class StateTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.path = str(Path(self.temp.name) / "state.sqlite3")
         self.state = State(self.path)
-        self.open = parse_detail(FIXTURE, URL)
-        self.closed = replace(self.open, status="closed", available=0)
+        self.open = replace(parse_detail(FIXTURE, URL), combination_status="available", open_combinations=[["187093200", "187093001"]])
+        self.closed = replace(self.open, status="closed", available=0, combination_status="blocked", open_combinations=[])
 
     def tearDown(self):
         self.state.close()

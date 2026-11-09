@@ -16,7 +16,7 @@ python -m classrabbit.server
 
 Open **http://127.0.0.1:8000** for the app or **http://127.0.0.1:8000/docs** for interactive API documentation. The OpenAPI schema is at `/openapi.json`.
 
-Search for **Winter 2027 / ENGR / 186W** or **Winter 2027 / COM SCI / 31**, choose a lecture, and add it to your watchlist. You can also paste an exact public UCLA ClassDetail URL. Search supports numeric course numbers with optional suffixes and lists lectures; linked discussions and labs are not expanded. Use a direct section link for prefixed course codes or other section types.
+Search for **Winter 2027 / ENGR / 186W** or **Winter 2027 / COM SCI / 31**, choose a lecture, and add it to your watchlist. You can also paste an exact public UCLA ClassDetail URL. Search supports numeric course numbers with optional suffixes and lists lectures. Each lecture check follows its required discussion/lab relationships before reporting a complete seat set. Use a direct section link for prefixed course codes or other section types.
 
 The server saves watches, observations, and reopening activity to `.local/app.sqlite3`. That directory is excluded from Git. Change the port or database with:
 
@@ -30,14 +30,14 @@ Stop with Ctrl+C. Background checks run while this server process is running, in
 
 - Responsive watchlist and activity screens with class search, exact section selection, filters, removal, restrictions, source notices, and MyUCLA links.
 - Validated HTTP API for search, saved watches, refreshes, activity, and source/health information. See [API reference](docs/API.md).
-- Persistent observations and one event per observed closed/waitlisted-to-open transition. The first check creates a baseline, not an alert.
+- Persistent observations and one event per verified blocked-to-available complete section combination. The first check creates a baseline, not an alert.
 - Shared checks for duplicate watches, a short search cache, unknown availability on failure, preserved historical observations, and scheduled retries.
 - A source badge and an explicit hourly freshness notice. Browser tests using simulated data show an additional visible test banner; the production server always uses the public UCLA adapter.
 - Immediate event streaming to an open browser once the app detects a reopening. This is an in-app alert, not an OS/phone push notification, and it does not make UCLA's source update faster.
 
 This is a **single-user local app**, bound to loopback. There are no user accounts, outbound email/SMS/push notifications, or hosted deployment. Events appear in the app. Do not expose this server publicly without adding authentication, user isolation, and deployment infrastructure. Run one server process against each database.
 
-An open lecture does not prove that a student is eligible or that its required discussion/lab has space. Current enrollment happens in MyUCLA.
+An open lecture alone does not trigger an opening alert. A positive complete section combination requires the lecture and a compatible seat at every required linked level. Missing or ambiguous relationships stay unknown. Enrollment restrictions and the student?s pass remain unverified; current enrollment happens in MyUCLA.
 
 ## Testing loop
 

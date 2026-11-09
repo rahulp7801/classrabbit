@@ -58,6 +58,12 @@ class WatchService:
                 UNIQUE(term, class_id)
             )""")
             store.db.commit()
+            # Old lecture-only observations must be rechecked after this upgrade.
+            for row in store.db.execute("SELECT term, class_id, snapshot FROM observations").fetchall():
+                if "combination_status" not in json.loads(row["snapshot"]):
+                    store.db.execute("UPDATE watches SET next_check_at=0 WHERE term=? AND class_id=?",
+                                     (row["term"], row["class_id"]))
+            store.db.commit()
 
     @contextmanager
     def storage(self):
@@ -128,6 +134,8 @@ class WatchService:
             # Re-adding a previously removed section starts a fresh baseline.
             store.db.execute("DELETE FROM observations WHERE school='ucla' AND term=? AND class_id=?",
                              (identity["term_cd"], identity["class_id"]))
+            store.db.execute("DELETE FROM verified_combinations WHERE school='ucla' AND term=? AND class_id=?",
+                             (identity["term_cd"], identity["class_id"]))
             store.db.commit()
             return self.refresh(watch_id)["watch"], True
 
@@ -174,8 +182,10 @@ class WatchService:
 
     @staticmethod
     def _event(row):
+        snapshot = json.loads(row["snapshot"])
+        kind = "combination_opening" if snapshot.get("combination_status") == "available" else "legacy_lecture_opening"
         return {"id": row["id"], "term": row["term"], "class_id": row["class_id"],
-                "observed_at": row["observed_at"], "snapshot": json.loads(row["snapshot"])}
+                "observed_at": row["observed_at"], "snapshot": snapshot, "kind": kind}
 
     def run_due(self):
         with self.lock, self.storage() as store:

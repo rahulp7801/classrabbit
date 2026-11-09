@@ -65,7 +65,7 @@ def lifecycle(page, url, source, clock, suffix):
     expect(page.locator("#fixture-banner")).to_be_visible()
     page.screenshot(path=str(ARTIFACTS / f"empty-{suffix}.png"), full_page=True)
     search_and_add(page)
-    expect(page.get_by_test_id("watch-card")).to_contain_text("Closed")
+    expect(page.get_by_test_id("watch-card")).to_contain_text("No complete seat combination")
     expect(page.locator("#closed-count")).to_have_text("1")
     page.reload()
     expect(page.get_by_test_id("watch-card")).to_have_count(1)
@@ -91,8 +91,8 @@ def lifecycle(page, url, source, clock, suffix):
     source.error = True
     clock.advance()
     page.get_by_role("button", name="Check section", exact=False).click()
-    expect(page.get_by_test_id("watch-card")).to_contain_text("Availability unknown")
-    expect(page.get_by_test_id("watch-card")).to_contain_text("Previous successful report: open")
+    expect(page.get_by_test_id("watch-card")).to_contain_text("Complete set unverified")
+    expect(page.get_by_test_id("watch-card")).to_contain_text("Previous successful report: section open")
     expect(page.locator(".seat-count")).to_have_text("—")
     expect(page.locator("#open-count")).to_have_text("0")
     page.screenshot(path=str(ARTIFACTS / f"outage-{suffix}.png"), full_page=True)
@@ -154,7 +154,7 @@ def unavailable_source_and_disconnect(page, url, source, clock, suffix):
     page.goto(url)
     source.error = True
     search_and_add(page)
-    expect(page.get_by_test_id("watch-card")).to_contain_text("Availability unknown")
+    expect(page.get_by_test_id("watch-card")).to_contain_text("Complete set unverified")
     expect(page.get_by_test_id("watch-card")).to_contain_text("Not yet checked")
     page.route("**/api/watchlist", lambda route: route.abort("failed"))
     page.get_by_role("button", name="Refresh list", exact=False).click()

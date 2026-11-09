@@ -68,6 +68,7 @@ class ReopeningEvent(BaseModel):
     class_id: str
     observed_at: str
     snapshot: Snapshot
+    kind: str
 
 
 def create_app(database=None, source=None, *, worker=True):
@@ -169,7 +170,7 @@ def create_app(database=None, source=None, *, worker=True):
                 yield "event: connected\ndata: {}\n\n"
                 pending = await asyncio.to_thread(service.events, 100)
                 for event in reversed(pending):
-                    if event["id"] > cursor:
+                    if event["id"] > cursor and event["kind"] == "combination_opening":
                         cursor = event["id"]
                         yield f"id: {cursor}\nevent: reopening\ndata: {json.dumps(event)}\n\n"
                 while not await request.is_disconnected():
@@ -178,7 +179,7 @@ def create_app(database=None, source=None, *, worker=True):
                     except asyncio.TimeoutError:
                         yield ": keep-alive\n\n"
                         continue
-                    if event["id"] > cursor:
+                    if event["id"] > cursor and event["kind"] == "combination_opening":
                         cursor = event["id"]
                         yield f"id: {cursor}\nevent: reopening\ndata: {json.dumps(event)}\n\n"
             finally:

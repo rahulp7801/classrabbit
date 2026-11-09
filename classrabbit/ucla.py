@@ -3,7 +3,7 @@
 No student credentials or private enrollment endpoints are used.
 """
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from html.parser import HTMLParser
 import json
@@ -130,6 +130,21 @@ def fetch(url):
 
 
 @dataclass(frozen=True)
+class LinkedSection:
+    class_id: str
+    parent_class_id: str
+    section: str
+    kind: str
+    status: str
+    available: int | None
+    capacity: int | None
+    source_url: str
+    children_required: bool
+    days: str = ""
+    time: str = ""
+
+
+@dataclass(frozen=True)
 class Snapshot:
     school: str
     term: str
@@ -147,6 +162,10 @@ class Snapshot:
     enrollment_url: str = ENROLL_URL
     source: str = "ucla_public_detail"
     realtime: bool = False
+    combination_status: str = "unknown"
+    combination_reason: str = "Required linked sections have not been verified."
+    linked_sections: list[LinkedSection] = field(default_factory=list)
+    open_combinations: list[list[str]] = field(default_factory=list)
 
     def as_dict(self):
         return asdict(self)
@@ -213,21 +232,7 @@ def find_sections(term, subject, course):
     normalized = normalize_course(course)
     digits, suffix = re.fullmatch(r"(\d+)([A-Z]*)", normalized).groups()
     catalog = (digits.zfill(4) + suffix).ljust(8)
-    model = {"subj_area_cd": subject.upper().strip(), "crs_catlg_no": catalog,
-             "search_by": "Subject", "term_cd": term, "ActiveEnrollmentFlag": "n", "HasData": "False"}
-    flags = dict.fromkeys(["enrollment_status", "meet_days", "start_time", "end_time", "meet_locations",
-                          "meet_units", "instructor", "class_career", "impacted", "enrollment_restrictions",
-                          "enforced_requisites", "individual_studies", "summer_session"])
-    flags["advanced"] = "y"
-    url = BASE + "Results/GetCourseTitlesPage?" + urlencode({
-        "search_by": "subject", "model": json.dumps(model), "filterFlags": json.dumps(flags), "isFilter": "false"})
-    try:
-        data = json.loads(fetch(url))
-        markup = data["ClassPartialViewData"]
-        if not isinstance(markup, str):
-            raise ValueError("Missing listing markup")
-    except (ValueError, KeyError, TypeError) as exc:
-        raise SourceError("UCLA did not return the expected course listing.") from exc
+    markup = course_listing(term, subject, catalog)
     doc = Document(markup)
     result = {}
     for node in doc.root.all():
@@ -245,6 +250,35 @@ def find_sections(term, subject, course):
     return list(result.values())
 
 
+def course_listing(term, subject, catalog):
+    model = {"subj_area_cd": subject.upper().strip(), "crs_catlg_no": catalog,
+             "search_by": "Subject", "term_cd": term, "ActiveEnrollmentFlag": "n", "HasData": "False"}
+    flags = dict.fromkeys(["enrollment_status", "meet_days", "start_time", "end_time", "meet_locations",
+                          "meet_units", "instructor", "class_career", "impacted", "enrollment_restrictions",
+                          "enforced_requisites", "individual_studies", "summer_session"])
+    flags["advanced"] = "y"
+    url = BASE + "Results/GetCourseTitlesPage?" + urlencode({
+        "search_by": "subject", "model": json.dumps(model), "filterFlags": json.dumps(flags), "isFilter": "false"})
+    try:
+        data = json.loads(fetch(url))
+        markup = data["ClassPartialViewData"]
+        if not isinstance(markup, str):
+            raise ValueError("Missing listing markup")
+    except (ValueError, KeyError, TypeError) as exc:
+        raise SourceError("UCLA did not return the expected course listing.") from exc
+    return markup
+
+
 def check(url):
-    validate_url(url)
-    return parse_detail(fetch(url), url)
+    from dataclasses import replace
+    from .combination import assess_combination
+
+    identity = validate_url(url)
+    snapshot = parse_detail(fetch(url), url)
+    if snapshot.status != "open":
+        return assess_combination(snapshot, "")
+    try:
+        listing = course_listing(identity["term_cd"], identity["subj_area_cd"], identity["crs_catlg_no"])
+    except SourceError as exc:
+        return replace(snapshot, combination_reason=f"Required sections could not be verified: {exc}")
+    return assess_combination(snapshot, listing)

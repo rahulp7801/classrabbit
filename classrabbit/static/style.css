@@ -10,3 +10,5 @@
 .filter{font-size:12px}.text-button{font-size:11px}
 .empty-state p{font-size:12px}.source-banner strong{font-size:12px}
 @media(max-width:720px){.stat div>span{font-size:10px;min-height:32px}.filter{font-size:11px}.section-meta{font-size:10px}.bottom-note p{font-size:10px}.bottom-note a{font-size:10px}.card-note{font-size:11px}.source-banner p>span{font-size:10px}}
+
+.combination-reason{background:#f5f0fa;padding:10px;border-radius:7px;line-height:1.7}.linked-section-list{padding:0;list-style:none}.linked-section-list li{display:grid;grid-template-columns:1fr 1fr;gap:3px 10px;padding:8px 0;border-bottom:1px solid #eee7f4}.linked-section-list small{grid-column:1/-1;color:#81728f;font-size:10px}.status-badge{white-space:normal;text-align:right;max-width:190px}
