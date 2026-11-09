@@ -130,7 +130,8 @@ function renderCard(item) {
     details.append(el("summary", "", "Source & enrollment details"),
       el("p", "", snapshot.source_notice), el("p", "", `Waitlist: ${snapshot.waitlist}`),
       el("p", "", `Restrictions: ${snapshot.restrictions}`),
-      safeLink("View UCLA section ↗", snapshot.source_url));
+      safeLink(snapshot.source === "ucla_myucla" ? "View in MyUCLA ↗" : "View UCLA section ↗",
+        snapshot.source === "ucla_myucla" ? snapshot.enrollment_url : snapshot.source_url));
     card.append(details);
   }
   const actions = el("div", "card-actions");
