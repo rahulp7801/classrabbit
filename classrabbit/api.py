@@ -1,12 +1,14 @@
 """Local HTTP API. Browser UI and API share one origin and one watchlist."""
 
 from contextlib import asynccontextmanager
+import asyncio
+import json
 import os
 from pathlib import Path
 from typing import Annotated
 
 from fastapi import FastAPI, HTTPException, Query, Request, Response
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -118,7 +120,7 @@ def create_app(database=None, source=None, *, worker=True):
     def sections(request: Request,
                  term: Annotated[str, Query(pattern=r"^\d{2}[FWS12]$")],
                  subject: Annotated[str, Query(min_length=2, max_length=20, pattern=r"^[A-Za-z &-]+$")],
-                 course: Annotated[str, Query(pattern=r"^\d{1,4}$")]):
+                 course: Annotated[str, Query(pattern=r"^\d{1,4}[A-Za-z]{0,2}$")]):
         try:
             return request.app.state.service.search(term, subject, course)
         except SourceError as exc:
@@ -151,6 +153,38 @@ def create_app(database=None, source=None, *, worker=True):
     @app.get("/api/events", response_model=list[ReopeningEvent], tags=["Activity"])
     def events(request: Request, limit: Annotated[int, Query(ge=1, le=100)] = 50):
         return request.app.state.service.events(limit)
+
+    @app.get("/api/events/stream", tags=["Activity"], response_class=StreamingResponse)
+    async def event_stream(request: Request, after: Annotated[int, Query(ge=0)] = 0):
+        """Push detected reopening events to an open browser; this does not change source freshness."""
+        service = request.app.state.service
+        previous = request.headers.get("last-event-id", "0")
+        cursor = max(after, int(previous)) if previous.isdigit() and len(previous) < 19 else after
+
+        async def messages():
+            nonlocal cursor
+            queue = service.event_hub.subscribe()
+            try:
+                # Subscribe before replay so events arriving during the read cannot be lost.
+                yield "event: connected\ndata: {}\n\n"
+                pending = await asyncio.to_thread(service.events, 100)
+                for event in reversed(pending):
+                    if event["id"] > cursor:
+                        cursor = event["id"]
+                        yield f"id: {cursor}\nevent: reopening\ndata: {json.dumps(event)}\n\n"
+                while not await request.is_disconnected():
+                    try:
+                        event = await asyncio.wait_for(queue.get(), timeout=10)
+                    except asyncio.TimeoutError:
+                        yield ": keep-alive\n\n"
+                        continue
+                    if event["id"] > cursor:
+                        cursor = event["id"]
+                        yield f"id: {cursor}\nevent: reopening\ndata: {json.dumps(event)}\n\n"
+            finally:
+                service.event_hub.unsubscribe(queue)
+
+        return StreamingResponse(messages(), media_type="text/event-stream", headers={"X-Accel-Buffering": "no"})
 
     static = Path(__file__).parent / "static"
     app.mount("/static", StaticFiles(directory=static), name="static")

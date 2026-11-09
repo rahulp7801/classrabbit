@@ -11,6 +11,7 @@ from urllib.parse import urlencode, parse_qs, urlsplit
 from uuid import uuid4
 
 from .state import State
+from .eventhub import EventHub
 from . import ucla
 
 
@@ -47,6 +48,7 @@ class WatchService:
         self.search_cache = {}
         self.stop_event = threading.Event()
         self.worker = None
+        self.event_hub = EventHub()
         with self.storage() as store:
             store.db.execute("""CREATE TABLE IF NOT EXISTS watches (
                 id TEXT PRIMARY KEY, term TEXT NOT NULL, class_id TEXT NOT NULL,
@@ -74,7 +76,7 @@ class WatchService:
                 "notice": "Public section counts update hourly. Confirm current availability and eligibility in MyUCLA."}
 
     def search(self, term, subject, course):
-        key = (term, subject.strip().upper(), str(int(course)))
+        key = (term, subject.strip().upper(), ucla.normalize_course(course))
         with self.lock:
             cached = self.search_cache.get(key)
             if cached and self.clock() - cached[0] < 300:
@@ -153,6 +155,9 @@ class WatchService:
                                  (now, self.clock() + delay, str(exc), failures, watch_id))
             store.db.commit()
             updated = store.db.execute("SELECT * FROM watches WHERE id=?", (watch_id,)).fetchone()
+            if reopened:
+                event = store.db.execute("SELECT * FROM events ORDER BY id DESC LIMIT 1").fetchone()
+                self.event_hub.publish(self._event(event))
             return {"watch": self._item(store, updated), "cached": False, "reopened": reopened}
 
     def remove(self, watch_id):
@@ -165,8 +170,12 @@ class WatchService:
     def events(self, limit=50):
         with self.lock, self.storage() as store:
             rows = store.db.execute("SELECT * FROM events ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
-            return [{"id": row["id"], "term": row["term"], "class_id": row["class_id"],
-                     "observed_at": row["observed_at"], "snapshot": json.loads(row["snapshot"])} for row in rows]
+            return [self._event(row) for row in rows]
+
+    @staticmethod
+    def _event(row):
+        return {"id": row["id"], "term": row["term"], "class_id": row["class_id"],
+                "observed_at": row["observed_at"], "snapshot": json.loads(row["snapshot"])}
 
     def run_due(self):
         with self.lock, self.storage() as store:

@@ -12,7 +12,7 @@ def main(argv=None):
     parser.add_argument("--url", help="A UCLA public ClassDetail link for an exact section")
     parser.add_argument("--term", help="UCLA term code, for example 27W")
     parser.add_argument("--subject", help='UCLA subject abbreviation, for example "COM SCI"')
-    parser.add_argument("--course", help="Numeric course number, for example 31")
+    parser.add_argument("--course", help="Course number, for example 31 or 186W")
     parser.add_argument("--class-id", help="Choose an exact class ID when looking up a course")
     parser.add_argument("--list", action="store_true", help="List lecture sections and their public detail links")
     parser.add_argument("--watch", action="store_true", help="Keep checking while this process runs")

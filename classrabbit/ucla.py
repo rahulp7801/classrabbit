@@ -199,11 +199,20 @@ def parse_detail(markup, url):
                     datetime.now(timezone.utc).isoformat(), " ".join(notices), url)
 
 
+def normalize_course(course):
+    match = re.fullmatch(r"(\d{1,4})([A-Z]{0,2})", str(course).strip().upper())
+    if not match:
+        raise SourceError("Use a course number such as 31 or 186W; for prefixed course codes, supply a ClassDetail URL.")
+    return str(int(match[1])) + match[2]
+
+
 def find_sections(term, subject, course):
-    """Find numeric catalog courses. More complex catalog codes use a ClassDetail URL."""
-    if not re.fullmatch(r"\d{2}[FWS12]", term) or not re.fullmatch(r"\d{1,4}", course):
-        raise SourceError("Use a term such as 27W and a numeric course such as 31; otherwise supply --url.")
-    catalog = course.zfill(4).ljust(8)
+    """Find numeric or suffixed catalog courses; prefixed codes use an exact URL."""
+    if not re.fullmatch(r"\d{2}[FWS12]", term):
+        raise SourceError("Use a term such as 27W.")
+    normalized = normalize_course(course)
+    digits, suffix = re.fullmatch(r"(\d+)([A-Z]*)", normalized).groups()
+    catalog = (digits.zfill(4) + suffix).ljust(8)
     model = {"subj_area_cd": subject.upper().strip(), "crs_catlg_no": catalog,
              "search_by": "Subject", "term_cd": term, "ActiveEnrollmentFlag": "n", "HasData": "False"}
     flags = dict.fromkeys(["enrollment_status", "meet_days", "start_time", "end_time", "meet_locations",

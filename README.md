@@ -16,7 +16,7 @@ python -m classrabbit.server
 
 Open **http://127.0.0.1:8000** for the app or **http://127.0.0.1:8000/docs** for interactive API documentation. The OpenAPI schema is at `/openapi.json`.
 
-Search for **Winter 2027 / COM SCI / 31**, choose a lecture, and add it to your watchlist. You can also paste an exact public UCLA ClassDetail URL. Numeric course search lists lectures; linked discussions and labs are not expanded. Use a direct section link for other course codes or section types.
+Search for **Winter 2027 / ENGR / 186W** or **Winter 2027 / COM SCI / 31**, choose a lecture, and add it to your watchlist. You can also paste an exact public UCLA ClassDetail URL. Search supports numeric course numbers with optional suffixes and lists lectures; linked discussions and labs are not expanded. Use a direct section link for prefixed course codes or other section types.
 
 The server saves watches, observations, and reopening activity to `.local/app.sqlite3`. That directory is excluded from Git. Change the port or database with:
 
@@ -33,6 +33,7 @@ Stop with Ctrl+C. Background checks run while this server process is running, in
 - Persistent observations and one event per observed closed/waitlisted-to-open transition. The first check creates a baseline, not an alert.
 - Shared checks for duplicate watches, a short search cache, unknown availability on failure, preserved historical observations, and scheduled retries.
 - A source badge and an explicit hourly freshness notice. Browser tests using simulated data show an additional visible test banner; the production server always uses the public UCLA adapter.
+- Immediate event streaming to an open browser once the app detects a reopening. This is an in-app alert, not an OS/phone push notification, and it does not make UCLA's source update faster.
 
 This is a **single-user local app**, bound to loopback. There are no user accounts, outbound email/SMS/push notifications, or hosted deployment. Events appear in the app. Do not expose this server publicly without adding authentication, user isolation, and deployment infrastructure. Run one server process against each database.
 
@@ -40,7 +41,7 @@ An open lecture does not prove that a student is eligible or that its required d
 
 ## Testing loop
 
-Run all parser/API/state tests and three Playwright browser iterations:
+Run all parser/API/state tests, three Playwright browser iterations, and ten controlled immediate-alert timing trials:
 
 ```powershell
 powershell -File scripts/verify.ps1 -Iterations 3
@@ -51,9 +52,12 @@ Or run the suites individually:
 ```powershell
 python -m unittest discover -s tests -v
 python -m tests.browser_suite --iterations 3
+python -m tests.immediate_proof --iterations 10
 ```
 
 The browser suite launches real Chromium and real local API servers backed by temporary databases. Only the UCLA data adapter is replaced with a controlled test source. It tests reopenings, error preservation, refresh deduplication, activity, duplicate selection, reload persistence, removal, invalid inputs, stale search results after term changes, source outages, disconnected-server recovery, keyboard dialog dismissal, filters, and mobile layouts. It does not repeatedly poll UCLA. Traces and screenshots go to `.local/browser-tests/`.
+
+The separate immediate-alert proof measures controlled closed-to-open transitions for ENGR 186W through the real API, event stream, and Chromium. It proves application delivery latency only. See [research findings, recorded timings, and screenshot](docs/REALTIME_RESEARCH.md) for the evidence and what remains unverified about UCLA source freshness.
 
 For a separate **opt-in live check**, start the normal server in another terminal, then run:
 

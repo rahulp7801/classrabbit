@@ -6,6 +6,8 @@ let events = [];
 let selectedFilter = "all";
 let toastTimer;
 let searchRevision = 0;
+let alertStream;
+let lastAlertId = 0;
 
 function el(tag, className = "", text = "") {
   const node = document.createElement(tag);
@@ -35,7 +37,7 @@ async function api(path, options = {}) {
     if (response.status === 204) return null;
     const data = await response.json();
     if (!response.ok) {
-      const message = typeof data.detail === "string" ? data.detail : "Check the term, subject area, and numeric course number.";
+      const message = typeof data.detail === "string" ? data.detail : "Check the term, subject area, and course number (for example 31 or 186W).";
       throw new Error(message);
     }
     return data;
@@ -208,6 +210,27 @@ function showView(view) {
   }
 }
 
+function connectAlerts() {
+  if (alertStream) alertStream.close();
+  lastAlertId = Math.max(lastAlertId, ...events.map(event => event.id), 0);
+  alertStream = new EventSource(`/api/events/stream?after=${lastAlertId}`);
+  alertStream.addEventListener("connected", () => {
+    $("#alert-connection").textContent = "In-app alerts connected · this page must stay open";
+  });
+  alertStream.addEventListener("reopening", message => {
+    const event = JSON.parse(message.data);
+    if (event.id <= lastAlertId) return;
+    lastAlertId = event.id;
+    const parts = courseParts({ snapshot: event.snapshot });
+    toast(`A seat opening was reported: ${parts.code} ${event.snapshot.section}. Check MyUCLA to confirm and enroll.`);
+    $("#toast").dataset.eventId = String(event.id);
+    loadDashboard().catch(error => toast(error.message, true));
+  });
+  alertStream.onerror = () => {
+    $("#alert-connection").textContent = "In-app alerts disconnected · reconnecting…";
+  };
+}
+
 $("#add-class").addEventListener("click", openSearch);
 $("#empty-add").addEventListener("click", openSearch);
 $("#close-search").addEventListener("click", () => $("#search-dialog").close());
@@ -238,7 +261,7 @@ $("#search-form").addEventListener("submit", async (event) => {
   $("#search-results").replaceChildren();
   const revision = ++searchRevision;
   try {
-    const params = new URLSearchParams({ term: $("#term").value, subject: $("#subject").value.trim().toUpperCase(), course: $("#course").value.trim() });
+    const params = new URLSearchParams({ term: $("#term").value, subject: $("#subject").value.trim().toUpperCase(), course: $("#course").value.trim().toUpperCase() });
     const result = await api(`/api/sections?${params}`);
     if (revision !== searchRevision) return;
     const heading = el("p", "result-heading", `${result.sections.length} lecture section${result.sections.length === 1 ? "" : "s"} found · choose your section`);
@@ -298,10 +321,13 @@ async function bootstrap() {
     const [source] = await Promise.all([api("/api/source"), loadDashboard()]);
     $("#fixture-banner").hidden = source.mode === "live";
     $("#source-mode").textContent = source.mode === "live" ? "UCLA source" : "Simulated source";
+    connectAlerts();
   } catch (error) {
     toast(error.message, true);
   }
 }
 
 bootstrap();
+window.addEventListener("pagehide", () => { if (alertStream) alertStream.close(); });
+window.addEventListener("pageshow", event => { if (event.persisted) connectAlerts(); });
 setInterval(() => { if (!document.hidden) loadDashboard().catch(error => toast(error.message, true)); }, 30000);

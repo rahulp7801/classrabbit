@@ -11,6 +11,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Parser/API/state tests failed.' }
     python -m tests.browser_suite --iterations $Iterations
     if ($LASTEXITCODE -ne 0) { throw 'Playwright browser tests failed. See .local/browser-tests.' }
+    python -m tests.immediate_proof --iterations 10
+    if ($LASTEXITCODE -ne 0) { throw 'Immediate-alert proof failed. See .local/immediate-proof.' }
     Write-Output 'Verification passed. Browser traces and screenshots: .local/browser-tests/'
 } finally {
     Pop-Location

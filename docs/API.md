@@ -14,6 +14,7 @@ Interactive documentation: `/docs`. Machine-readable schemas: `/openapi.json`. T
 | POST | `/api/watchlist/{id}/refresh` | Check when due; otherwise return the saved result with `cached: true` |
 | DELETE | `/api/watchlist/{id}` | Stop watching a section; historical activity remains |
 | GET | `/api/events?limit=50` | Latest reopening events, newest first; limit 1–100 |
+| GET | `/api/events/stream?after=0` | Server-sent reopening events for connected clients; supports `Last-Event-ID` replay |
 
 ## Example in PowerShell
 
@@ -35,5 +36,9 @@ Invoke-RestMethod "$base/api/events"
 - `stale` is true when there is no snapshot, a source check failed, or the last successful fetch is at least one source interval old. An unstale fetch can still contain UCLA's cached data.
 - Valid public URLs must identify exactly one term, subject, catalog number, class ID, and class number. Arbitrary hosts and login URLs are rejected. The local prototype supports 25 watches.
 - Invalid query/body fields return `422`; invalid public links return `400`; unknown watch IDs return `404`; the watch limit returns `409`; course-search source failures return `502`.
+
+Course search supports a numeric base with a suffix, such as `31` or `186W`. Prefixed course codes still require a direct public section link.
+
+The event stream sends `connected` and `reopening` events, with the persisted event ID in the SSE `id` field. Reconnection replays up to the latest 100 stored events after the supplied cursor. Heartbeats keep idle connections open. Slow connected clients have a bounded 100-event buffer; activity remains persisted separately. Streaming reduces application delivery delay; it does not change the source update frequency or deliver OS notifications.
 
 The background worker and manual refresh use the same cooldown and durable transition history. Removing and re-adding a section establishes a new baseline. No endpoint bypasses the source's hourly interval. The API and browser share the same server origin; cross-origin browser mutations are rejected. There is no authentication or multi-user isolation, so keep the default loopback binding.

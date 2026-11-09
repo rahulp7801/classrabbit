@@ -1,0 +1,64 @@
+{
+  "result": "pass",
+  "course": "ENGR 186W",
+  "term": "27W",
+  "class_id": "186827200",
+  "source_mode": "controlled fixture built from a real public UCLA page",
+  "iterations": 10,
+  "median_ms": 33.81,
+  "maximum_ms": 39.3,
+  "samples": [
+    {
+      "iteration": 1,
+      "source_return_to_browser_assertion_ms": 37.33,
+      "refresh_request_to_browser_assertion_ms": 43.0
+    },
+    {
+      "iteration": 2,
+      "source_return_to_browser_assertion_ms": 33.53,
+      "refresh_request_to_browser_assertion_ms": 40.93
+    },
+    {
+      "iteration": 3,
+      "source_return_to_browser_assertion_ms": 32.67,
+      "refresh_request_to_browser_assertion_ms": 40.49
+    },
+    {
+      "iteration": 4,
+      "source_return_to_browser_assertion_ms": 33.01,
+      "refresh_request_to_browser_assertion_ms": 40.77
+    },
+    {
+      "iteration": 5,
+      "source_return_to_browser_assertion_ms": 34.45,
+      "refresh_request_to_browser_assertion_ms": 42.84
+    },
+    {
+      "iteration": 6,
+      "source_return_to_browser_assertion_ms": 32.73,
+      "refresh_request_to_browser_assertion_ms": 39.38
+    },
+    {
+      "iteration": 7,
+      "source_return_to_browser_assertion_ms": 39.3,
+      "refresh_request_to_browser_assertion_ms": 46.94
+    },
+    {
+      "iteration": 8,
+      "source_return_to_browser_assertion_ms": 34.09,
+      "refresh_request_to_browser_assertion_ms": 41.63
+    },
+    {
+      "iteration": 9,
+      "source_return_to_browser_assertion_ms": 36.13,
+      "refresh_request_to_browser_assertion_ms": 43.44
+    },
+    {
+      "iteration": 10,
+      "source_return_to_browser_assertion_ms": 32.76,
+      "refresh_request_to_browser_assertion_ms": 40.0
+    }
+  ],
+  "proves": "Detected opening -> durable event -> server-sent event -> visible Chromium in-app alert.",
+  "does_not_prove": "Time from an actual UCLA seat drop to an observable source update, or phone delivery."
+}

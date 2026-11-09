@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from classrabbit.cli import main
 from classrabbit.state import State
-from classrabbit.ucla import SourceError, find_sections, parse_detail, validate_url
+from classrabbit.ucla import SourceError, find_sections, normalize_course, parse_detail, validate_url
 
 FIXTURE = (Path(__file__).parent / "fixtures" / "ucla_detail.html").read_text(encoding="utf-8")
 URL = ("https://sa.ucla.edu/ro/Public/SOC/Results/ClassDetail?term_cd=27W"
@@ -15,6 +15,23 @@ URL = ("https://sa.ucla.edu/ro/Public/SOC/Results/ClassDetail?term_cd=27W"
 
 
 class ParsingTests(unittest.TestCase):
+    def test_course_suffix_is_preserved_and_numeric_base_is_normalized(self):
+        self.assertEqual(normalize_course("0186w"), "186W")
+        self.assertEqual(normalize_course("0031"), "31")
+        with self.assertRaises(SourceError):
+            normalize_course("186<script>")
+
+    @patch("classrabbit.ucla.fetch")
+    def test_discovery_finds_the_exact_engr186w_catalog(self, mock_fetch):
+        import html
+        import json
+        from tests.immediate_proof import ENGR_URL
+        from urllib.parse import parse_qs, urlsplit
+        mock_fetch.return_value = json.dumps({"ClassPartialViewData": '<a href="' + html.escape(ENGR_URL) + '">Lec 1</a>'})
+        sections = find_sections("27W", "ENGR", "0186w")
+        self.assertEqual(sections[0]["class_id"], "186827200")
+        query = parse_qs(urlsplit(mock_fetch.call_args.args[0]).query)
+        self.assertEqual(json.loads(query["model"][0])["crs_catlg_no"], "0186W   ")
     def test_real_public_response_extracts_identity_counts_and_freshness(self):
         snapshot = parse_detail(FIXTURE, URL)
         self.assertEqual((snapshot.class_id, snapshot.term, snapshot.section), ("187093200", "27W", "Lec 1"))
