@@ -5,12 +5,25 @@ from datetime import datetime, timezone
 from html import escape
 import json
 import re
-from urllib.parse import urlencode, urljoin
+from urllib.parse import urlencode, urljoin, urlsplit
 
 from .ucla import BASE, Document, LinkedSection, SourceError, fetch, validate_url
 
 KINDS = {"lec": "lecture", "dis": "discussion", "lab": "laboratory",
          "sem": "seminar", "tut": "tutorial", "rec": "recitation", "qz": "quiz"}
+
+
+def section_link(url):
+    """Normalize links in signed-in responses without allowing private input routes.
+
+    Only the exact ClassDetail path is translated. Query parameters are reduced to
+    the five class identity fields; no session-bearing extras are persisted.
+    """
+    parts = urlsplit(url)
+    if parts.path.lower() == "/ro/classsearch/results/classdetail":
+        url = parts._replace(path="/ro/Public/SOC/Results/ClassDetail").geturl()
+    identity = validate_url(url)
+    return BASE + "Results/ClassDetail?" + urlencode(sorted(identity.items()))
 
 
 def models_in(markup):
@@ -155,7 +168,7 @@ def assess_combination(snapshot, listing, fetch_summary=None):
                           if n.tag == "a" and "ClassDetail?" in n.attrs.get("href", "")]
                 if len(anchor) != 1:
                     raise SourceError("Required section identity is missing.")
-                child_url = urljoin(BASE, anchor[0].attrs["href"])
+                child_url = section_link(urljoin(BASE, anchor[0].attrs["href"]))
                 child_identity = validate_url(child_url)
                 if (child_identity["class_id"] != child_id or any(child_identity[k].strip() != identity[k].strip()
                         for k in ["term_cd", "subj_area_cd", "crs_catlg_no"])):
@@ -228,7 +241,7 @@ def check_summary_combination(metadata, listing, fetch_summary=None):
                if n.tag == "a" and "ClassDetail?" in n.attrs.get("href", "")]
     if len(anchors) != 1:
         raise SourceError("The refreshed lecture identity is missing.")
-    observed = validate_url(urljoin(BASE, anchors[0].attrs["href"]))
+    observed = validate_url(section_link(urljoin(BASE, anchors[0].attrs["href"])))
     if any(observed[k].strip() != identity[k].strip() for k in identity):
         raise SourceError("The refreshed summary belongs to a different lecture.")
     status, available, capacity = status_counts(column(primary[0], "statusColumn").clean())

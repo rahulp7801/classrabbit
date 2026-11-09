@@ -55,6 +55,7 @@ class SourceInfo(BaseModel):
     refresh_interval_seconds: int | None
     check_interval_seconds: int
     notice: str
+    session_status: str | None = None
 
 
 class SearchResult(BaseModel):

@@ -349,9 +349,9 @@ async function bootstrap() {
   try {
     const [source] = await Promise.all([api("/api/source"), loadDashboard()]);
     $("#fixture-banner").hidden = source.mode === "live";
-    $("#source-mode").textContent = source.mode === "live" ? "UCLA source" : "Simulated source";
+    $("#source-mode").textContent = source.mode === "live" ? source.label : "Simulated source";
     const seconds = source.check_interval_seconds;
-    $("#source-heading").textContent = `Public schedule · ${seconds < 60 ? seconds + "-second" : Math.round(seconds / 60) + "-minute"} checks`;
+    $("#source-heading").textContent = `${source.id === "ucla_myucla" ? "MyUCLA" : "Public schedule"} · ${seconds < 60 ? seconds + "-second" : Math.round(seconds / 60) + "-minute"} checks`;
     $("#source-description").textContent = source.notice;
     connectAlerts();
   } catch (error) {

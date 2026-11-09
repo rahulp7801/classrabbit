@@ -43,6 +43,12 @@ class CombinationTests(unittest.TestCase):
         self.assertEqual(result.available, 10)
         self.assertEqual(result.open_combinations, [["186827200", "186827001"]])
 
+    def test_signed_in_discussion_links_preserve_identity_without_private_query_extras(self):
+        children = opened_discussion().replace("/ro/Public/SOC/Results/ClassDetail", "/ro/ClassSearch/Results/ClassDetail")
+        result = self.assess(children=children)
+        self.assertEqual(result.combination_status, "available")
+        self.assertTrue(all("/ro/Public/SOC/Results/ClassDetail?" in row.source_url for row in result.linked_sections))
+
     def test_empty_missing_or_wrong_parent_children_cannot_produce_opening(self):
         for children in ["<html>Unavailable</html>", CHILDREN.replace('class="row-fluid data_row', 'class="removed'),
                          opened_discussion().replace("186827001_186827200_ENGR0186W", "186827001_999999999_ENGR0186W")]:

@@ -96,3 +96,24 @@ class FastCheckTests(unittest.TestCase):
             upgraded.run_due()
             self.assertEqual(source.check_calls, 2)
             self.assertEqual(len(upgraded.events()), 1)
+
+    def test_response_time_does_not_add_another_full_check_interval(self):
+        with tempfile.TemporaryDirectory() as directory:
+            clock = Clock()
+            source = FixtureSource(clock)
+            source.interval = 2
+            original = source.check
+
+            def slow_read(url):
+                clock.advance(.6)
+                return original(url)
+
+            source.check = slow_read
+            service = WatchService(Path(directory) / "app.sqlite3", source, clock)
+            from tests.support import URL
+            service.add(URL)
+            source.status = "open"
+            clock.advance(1.41)
+            service.run_due()
+            self.assertEqual(source.check_calls, 2)
+            self.assertEqual(len(service.events()), 1)

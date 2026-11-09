@@ -98,8 +98,9 @@ class WatchService:
             store.close()
 
     def source_info(self):
-        return {"id": "ucla_public_summary", "label": self.source.label,
+        return {"id": getattr(self.source, "id", "ucla_public_summary"), "label": self.source.label,
                 "mode": self.source.mode, "realtime": False,
+                "session_status": getattr(self.source, "session_status", None),
                 "refresh_interval_seconds": getattr(self.source, "freshness", None),
                 "check_interval_seconds": self.source.interval,
                 "notice": getattr(self.source, "notice", "Public enrollment data may lag. Confirm eligibility in MyUCLA.")}
@@ -147,8 +148,9 @@ class WatchService:
                                         (identity["term_cd"], identity["class_id"])).fetchone()
             if existing:
                 return self._item(store, existing), False
-            if store.db.execute("SELECT count(*) FROM watches").fetchone()[0] >= 25:
-                raise WatchLimit("This local prototype supports up to 25 watched sections.")
+            limit = getattr(self.source, "max_watches", 25)
+            if store.db.execute("SELECT count(*) FROM watches").fetchone()[0] >= limit:
+                raise WatchLimit(f"This source supports up to {limit} watched sections in the local prototype.")
             watch_id = str(uuid4())
             now = self.clock()
             store.db.execute("INSERT INTO watches (id, term, class_id, source_url, added_at, next_check_at) VALUES (?, ?, ?, ?, ?, ?)",
@@ -176,7 +178,9 @@ class WatchService:
                 if snapshot.term != row["term"] or snapshot.class_id != row["class_id"]:
                     raise ucla.SourceError("Source returned a different section; previous observation preserved.")
                 reopened = store.record(snapshot)
-                next_check = self.clock() + self.source.interval
+                # Target request-start cadence instead of adding an extra full
+                # interval after a slow response. Keep a gap and one request at a time.
+                next_check = max(now + self.source.interval, self.clock() + .25)
                 store.db.execute("UPDATE watches SET last_attempt_at=?, next_check_at=?, error=NULL, failures=0 WHERE id=?",
                                  (now, next_check, watch_id))
             except ucla.SourceError as exc:
@@ -228,7 +232,7 @@ class WatchService:
                     self.run_due()
                 except Exception:
                     logging.exception("Scheduled section check failed; retrying on the next worker pass")
-                self.stop_event.wait(1)
+                self.stop_event.wait(min(1, max(.1, self.source.interval / 10)))
         self.worker = threading.Thread(target=run, name="classrabbit-checker", daemon=True)
         self.worker.start()
 
@@ -236,3 +240,6 @@ class WatchService:
         self.stop_event.set()
         if self.worker:
             self.worker.join(timeout=30)
+        close = getattr(self.source, "close", None)
+        if close:
+            close()

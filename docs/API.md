@@ -45,4 +45,6 @@ Each snapshot includes `combination_status` (`available`, `blocked`, or `unknown
 
 `check_interval_seconds` is 30 by default, configurable with `CLASSRABBIT_POLL_SECONDS` between 15 and 3600. `refresh_interval_seconds` is null because the underlying summary-data update frequency is unverified. The scheduler wakes every second. It requests primary and child availability at each due check, while reusing descriptions/restrictions for up to an hour.
 
+With `--source myucla`, the adapter uses the user's isolated signed-in browser session and the observed read-only ClassSearch endpoint. The source ID is `ucla_myucla`, `session_status` reports connection state, and the target check cadence is two seconds. The scheduler wakes more frequently in this mode. Network time affects the actual period. See [authenticated read-only access](MYUCLA_READ_ONLY.md). A missing/expired session returns unknown availability; there is no fallback to public counts.
+
 The background worker and manual refresh share the configured check cooldown and durable transition history. Removing and re-adding a section establishes a new baseline. The API and browser share the same server origin; cross-origin browser mutations are rejected. There is no authentication or multi-user isolation, so keep the default loopback binding.
