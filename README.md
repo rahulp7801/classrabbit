@@ -87,6 +87,8 @@ See [API approval steps and inquiry draft](docs/API_ACCESS.md) for requesting of
 
 ## Command-line checker
 
+To investigate the signed-in MyUCLA data source, run `python -m classrabbit.myucla_probe`. It opens an isolated visible browser for manual UCLA sign-in and Duo. Open Find a Class and Enroll, choose Winter 2027 ENGR 186W, and expand Lecture 1's discussions. The helper records only the specified lecture/linked rows and a limited set of read-response metadata under `.local/myucla-probe/`; its browser profile is Git-ignored. This is a source inspection helper, not an implemented authenticated monitoring adapter or proof of instant source updates.
+
 The original diagnostic checker remains available without the web server. It uses detail-page counts and an hourly interval; use the server for the fast summary adapter:
 
 ```powershell
