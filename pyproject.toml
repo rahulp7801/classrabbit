@@ -1,0 +1,19 @@
+[project]
+name = "classrabbit"
+version = "0.2.0"
+description = "Local UCLA enrollment tracker with an HTTP API and browser interface"
+requires-python = ">=3.11"
+dependencies = ["fastapi==0.135.3", "uvicorn==0.42.0"]
+
+[project.optional-dependencies]
+test = ["httpx==0.28.1", "playwright==1.58.0"]
+
+[tool.setuptools.package-data]
+classrabbit = ["static/*"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["classrabbit*"]
