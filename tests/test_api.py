@@ -136,6 +136,51 @@ class ApiTests(unittest.TestCase):
             self.assertEqual(restarted.get("/api/watchlist").json()[0]["id"], item["id"])
             self.assertEqual(len(restarted.get("/api/events").json()), 1)
 
+    def test_saved_dashboard_reads_finish_while_upstream_check_is_blocked(self):
+        item = self.add().json()
+        self.clock.advance()
+        entered = threading.Event()
+        release = threading.Event()
+        original = self.source.check
+
+        def blocked_check(url):
+            entered.set()
+            if not release.wait(10):
+                raise AssertionError("Test failed to release simulated upstream check")
+            return original(url)
+
+        self.source.status = "open"
+        self.source.check = blocked_check
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            refresh = pool.submit(self.client.post, f"/api/watchlist/{item['id']}/refresh")
+            try:
+                self.assertTrue(entered.wait(2))
+                for path in ["/api/watchlist", "/api/events", "/api/source", "/api/health"]:
+                    response = pool.submit(self.client.get, path).result(timeout=2)
+                    self.assertEqual(response.status_code, 200)
+                    if path == "/api/watchlist":
+                        saved = response.json()[0]
+                        self.assertTrue(saved["checking"])
+                        self.assertTrue(saved["stale"])
+                        self.assertEqual(saved["snapshot"]["status"], "closed")
+                    elif path == "/api/events":
+                        self.assertEqual(response.json(), [])
+            finally:
+                release.set()
+            result = refresh.result(timeout=3).json()
+        self.assertFalse(result["watch"]["checking"])
+        self.assertTrue(result["reopened"])
+        self.assertEqual(len(self.client.get("/api/events").json()), 1)
+
+    def test_failed_check_always_clears_in_progress_state(self):
+        item = self.add().json()
+        self.clock.advance()
+        self.source.error = True
+        result = self.client.post(f"/api/watchlist/{item['id']}/refresh").json()
+        self.assertFalse(result["watch"]["checking"])
+        self.assertIsNotNone(result["watch"]["error"])
+        self.assertIsNone(self.app.state.service.checking_watch)
+
     def test_concurrent_adds_share_one_check(self):
         with ThreadPoolExecutor(max_workers=4) as executor:
             responses = list(executor.map(lambda _: self.add(), range(4)))

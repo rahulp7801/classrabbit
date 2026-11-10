@@ -195,6 +195,28 @@ def safety_pause_and_resume(page, url, source, clock, suffix):
     page.screenshot(path=str(ARTIFACTS / f"safety-hold-{suffix}.png"), full_page=True)
 
 
+def stale_reports_are_not_open_seats(page, url, source, clock, suffix):
+    source.interval = 30
+    source.status = "open"
+    page.goto(url)
+    search_and_add(page)
+    expect(page.locator("#open-count")).to_have_text("1")
+    expect(page.locator(".seat-count")).to_have_text("2")
+    # UI aging is local: advancing the browser clock must not issue an upstream read.
+    page.clock.install()
+    page.clock.fast_forward(31000)
+    expect(page.locator("#open-count")).to_have_text("0")
+    expect(page.get_by_test_id("watch-card")).to_contain_text("Complete set unverified")
+    expect(page.get_by_test_id("watch-card")).to_contain_text("saved report has expired")
+    expect(page.locator(".seat-count")).to_have_text("—")
+    assert source.check_calls == 1
+    page.get_by_role("button", name="Open", exact=True).click()
+    expect(page.locator("#no-filter-results")).to_be_visible()
+    page.get_by_role("button", name="All classes", exact=False).click()
+    expect(page.get_by_test_id("watch-card")).to_have_count(1)
+    page.screenshot(path=str(ARTIFACTS / f"stale-{suffix}.png"), full_page=True)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--iterations", type=int, default=3)
@@ -202,7 +224,7 @@ def main():
     if not 1 <= args.iterations <= 20:
         parser.error("Choose between 1 and 20 iterations")
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
-    scenarios = [lifecycle, validation_and_errors, mobile_and_filters, unavailable_source_and_disconnect, safety_pause_and_resume]
+    scenarios = [lifecycle, validation_and_errors, mobile_and_filters, unavailable_source_and_disconnect, safety_pause_and_resume, stale_reports_are_not_open_seats]
     total = 0
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()

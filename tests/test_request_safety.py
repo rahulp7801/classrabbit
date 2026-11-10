@@ -191,3 +191,23 @@ class RequestSafetyTests(unittest.TestCase):
         for interval in [1, 2, 10, 29, 3601]:
             with self.assertRaises(ValueError):
                 MyUCLASource(reader=object(), poll_seconds=interval)
+
+    def test_explicit_sign_in_resume_reschedules_without_skipping_shared_deadline(self):
+        source = FixtureSource(self.clock)
+        source.interval = 30
+        source.check = Mock(side_effect=SafetyHold("sign-in pause"))
+        reader = SimpleNamespace(safety=self.guard)
+        source.resume_sign_in = reader.safety.resume_sign_in
+        service = WatchService(self.path.parent / "resume.sqlite3", source, self.clock)
+        item, _ = service.add(URL)
+        for status in [401, 401]:
+            with self.assertRaises(SafetyHold):
+                self.guard.response(status)
+            source.safety_status = self.guard.info()
+            service.resume_sign_in()
+            updated = service.list_watches()[0]
+            deadline = datetime.fromisoformat(updated["next_check_at"]).timestamp()
+            self.assertAlmostEqual(deadline, self.guard.info()["next_request_at"], places=5)
+            self.assertGreater(deadline, self.clock())
+            self.assertLess(deadline, datetime.fromisoformat(item["next_check_at"]).timestamp())
+            self.assertIsNotNone(updated["error"], "Resume must not present an old report as verified")

@@ -29,6 +29,7 @@ class WatchItem(BaseModel):
     snapshot: Snapshot | None
     error: str | None
     stale: bool
+    checking: bool = False
     failures: int
     added_at: str
     last_attempt_at: str | None
@@ -132,15 +133,10 @@ def create_app(database=None, source=None, *, worker=True):
     @app.post("/api/source/resume", response_model=SourceInfo, tags=["Status"])
     def resume_sign_in(request: Request):
         service = request.app.state.service
-        resume = getattr(service.source, "resume_sign_in", None)
-        if resume is None:
-            raise HTTPException(409, "This source has no sign-in pause to resume.")
-        with service.lock:
-            try:
-                resume()
-            except SourceError as exc:
-                raise HTTPException(409, str(exc)) from exc
-        return service.source_info()
+        try:
+            return service.resume_sign_in()
+        except SourceError as exc:
+            raise HTTPException(409, str(exc)) from exc
 
     @app.get("/api/sections", response_model=SearchResult, tags=["Courses"], responses={502: {"description": "Upstream source unavailable or unrecognized"}})
     def sections(request: Request,

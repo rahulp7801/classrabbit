@@ -67,6 +67,7 @@ class WatchService:
         self.search_cache = {}
         self.stop_event = threading.Event()
         self.worker = None
+        self.checking_watch = None
         self.event_hub = EventHub()
         with self.storage() as store:
             store.db.execute("""CREATE TABLE IF NOT EXISTS watches (
@@ -119,6 +120,21 @@ class WatchService:
             self.search_cache[key] = (self.clock(), sections)
             return {"sections": sections, "source": self.source_info(), "cached": False}
 
+    def resume_sign_in(self):
+        with self.lock:
+            resume = getattr(self.source, "resume_sign_in", None)
+            if resume is None:
+                raise ucla.SourceError("This source has no sign-in pause to resume.")
+            resume()
+            safety = getattr(self.source, "safety_status", None) or {}
+            earliest = max(self.clock(), safety.get("cooldown_until", 0), safety.get("next_request_at", 0))
+            with self.storage() as store:
+                # Explicit manual sign-in should not wait out generic failure
+                # backoff. The transport still enforces all shared deadlines.
+                store.db.execute("UPDATE watches SET next_check_at=?", (earliest,))
+                store.db.commit()
+            return self.source_info()
+
     def _item(self, store, row):
         observation = store.db.execute(
             "SELECT snapshot FROM observations WHERE school='ucla' AND term=? AND class_id=?",
@@ -137,11 +153,15 @@ class WatchService:
                 "label": snapshot["course"] if snapshot else fallback,
                 "snapshot": snapshot, "error": error, "stale": stale,
                 "failures": row["failures"], "added_at": iso(row["added_at"]),
+                "checking": self.checking_watch == row["id"],
                 "last_attempt_at": iso(row["last_attempt_at"]) if row["last_attempt_at"] is not None else None,
                 "next_check_at": iso(row["next_check_at"])}
 
     def list_watches(self):
-        with self.lock, self.storage() as store:
+        # Reading saved state must not wait for the serialized upstream transport.
+        # A read transaction keeps rows and observations from the same commit.
+        with self.storage() as store:
+            store.db.execute("BEGIN")
             rows = store.db.execute("SELECT * FROM watches ORDER BY added_at, id").fetchall()
             return [self._item(store, row) for row in rows]
 
@@ -178,6 +198,7 @@ class WatchService:
             if now < row["next_check_at"]:
                 return {"watch": self._item(store, row), "cached": True, "reopened": False}
             reopened = False
+            self.checking_watch = watch_id
             try:
                 snapshot = self.source.check(row["source_url"])
                 if snapshot.term != row["term"] or snapshot.class_id != row["class_id"]:
@@ -194,6 +215,8 @@ class WatchService:
                 next_check = max(self.clock() + delay, getattr(exc, "retry_at", 0))
                 store.db.execute("UPDATE watches SET last_attempt_at=?, next_check_at=?, error=?, failures=? WHERE id=?",
                                  (now, next_check, str(exc), failures, watch_id))
+            finally:
+                self.checking_watch = None
             store.db.commit()
             updated = store.db.execute("SELECT * FROM watches WHERE id=?", (watch_id,)).fetchone()
             if reopened:
@@ -209,7 +232,7 @@ class WatchService:
                 raise MissingWatch()
 
     def events(self, limit=50):
-        with self.lock, self.storage() as store:
+        with self.storage() as store:
             rows = store.db.execute("SELECT * FROM events ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
             return [self._event(row) for row in rows]
 

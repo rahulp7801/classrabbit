@@ -8,6 +8,8 @@ let toastTimer;
 let searchRevision = 0;
 let alertStream;
 let lastAlertId = 0;
+let sourceInfo = null;
+let dashboardRequest = null;
 
 function el(tag, className = "", text = "") {
   const node = document.createElement(tag);
@@ -51,7 +53,7 @@ async function api(path, options = {}) {
 }
 
 function formattedTime(value) {
-  return value ? new Date(value).toLocaleString([], { timeZone: "America/Los_Angeles", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) + " PT" : "Not yet checked";
+  return value ? new Date(value).toLocaleString([], { timeZone: "America/Los_Angeles", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", second: "2-digit" }) + " PT" : "Not yet checked";
 }
 
 function courseParts(item) {
@@ -62,6 +64,22 @@ function courseParts(item) {
 
 function completeSet(snapshot) {
   return snapshot?.combination_status === "available" && snapshot.status === "open" && snapshot.available > 0 && snapshot.open_combinations?.length > 0;
+}
+
+function currentReport(item) {
+  return !item.error && !item.stale && item.snapshot;
+}
+
+function expireReports() {
+  if (!sourceInfo) return false;
+  let changed = false;
+  for (const item of watches) {
+    if (!item.stale && item.snapshot && Date.now() - Date.parse(item.snapshot.checked_at) >= sourceInfo.check_interval_seconds * 1000) {
+      item.stale = true;
+      changed = true;
+    }
+  }
+  return changed;
 }
 
 function combinationLabel(snapshot) {
@@ -85,7 +103,7 @@ function openSearch() {
 function renderCard(item) {
   const snapshot = item.snapshot;
   const parts = courseParts(item);
-  const status = item.error || !snapshot || snapshot.combination_status === "unknown" ? "unknown" : completeSet(snapshot) ? "open" : "closed";
+  const status = !currentReport(item) || snapshot.combination_status === "unknown" ? "unknown" : completeSet(snapshot) ? "open" : "closed";
   const card = el("article", "watch-card");
   card.dataset.testid = "watch-card";
   card.dataset.watchId = item.id;
@@ -94,19 +112,19 @@ function renderCard(item) {
   const heading = el("h2", "", parts.title);
   const section = el("p", "section-meta", `${snapshot?.section || "Section"} · ${item.term} · Class ID ${item.class_id}`);
   const seats = el("div", "seats-line");
-  seats.append(el("span", `seat-count ${status}`, item.error || snapshot?.available == null ? "—" : String(snapshot.available)), document.createTextNode(snapshot?.capacity && !item.error ? `of ${snapshot.capacity} seats left in ${snapshot.section}` : "section seats · unconfirmed"));
+  seats.append(el("span", `seat-count ${status}`, !currentReport(item) || snapshot?.available == null ? "—" : String(snapshot.available)), document.createTextNode(snapshot?.capacity && currentReport(item) ? `of ${snapshot.capacity} seats left in ${snapshot.section}` : "section seats · unconfirmed"));
   const track = el("div", "progress-track");
   const fill = el("div", "progress-fill");
   fill.style.width = `${snapshot?.capacity && status !== "unknown" ? Math.min(100, (snapshot.available || 0) / snapshot.capacity * 100) : 0}%`;
   track.append(fill);
   card.append(top, heading, section, seats, track);
-  if (snapshot) card.append(el("p", "card-note combination-reason", snapshot.combination_reason));
+  if (snapshot) card.append(el("p", "card-note combination-reason", `${currentReport(item) ? "" : "Previous report: "}${snapshot.combination_reason}`));
   if (snapshot?.linked_sections?.length) {
     const linked = snapshot.linked_sections;
     const details = el("details", "linked-sections");
     details.open = status !== "open";
     const positive = linked.filter(s => s.status === "open" && s.available > 0).length;
-    details.append(el("summary", "", `Required linked sections: ${positive} of ${linked.length} report seats`));
+    details.append(el("summary", "", `${currentReport(item) ? "Required linked sections" : "Previous linked-section report"}: ${positive} of ${linked.length} report seats`));
     const list = el("ul", "linked-section-list");
     for (const child of linked) {
       const row = el("li");
@@ -123,8 +141,13 @@ function renderCard(item) {
     error.setAttribute("role", "status");
     card.append(error);
     if (snapshot) card.append(el("p", "card-note", `Previous successful report: section ${snapshot.status}, ${snapshot.available ?? "unknown"} seats left; complete set ${snapshot.combination_status}. This is historical data.`));
+  } else if (item.stale && snapshot) {
+    card.append(el("p", "card-note", "This saved report has expired. Availability stays unverified until a new check completes."));
   }
   card.append(el("p", "card-note", `Last successful check: ${formattedTime(snapshot?.checked_at)}`));
+  const progress = el("p", "card-note check-progress", item.checking ? "Checking lecture and required sections…" : `Next scheduled check: ${formattedTime(item.next_check_at)}`);
+  progress.setAttribute("role", "status");
+  card.append(progress);
   if (snapshot) {
     const details = el("details");
     details.append(el("summary", "", "Source & enrollment details"),
@@ -146,12 +169,13 @@ function renderCard(item) {
 }
 
 function renderDashboard() {
+  expireReports();
   $("#nav-count").textContent = String(watches.length);
   $("#total-count").textContent = String(watches.length);
   $("#filter-total").textContent = String(watches.length);
-  $("#open-count").textContent = String(watches.filter(w => !w.error && completeSet(w.snapshot)).length);
-  $("#closed-count").textContent = String(watches.filter(w => !w.error && w.snapshot?.combination_status === "blocked").length);
-  const visible = watches.filter(w => selectedFilter === "all" || (selectedFilter === "open" ? !w.error && completeSet(w.snapshot) : !w.error && w.snapshot?.combination_status === "blocked"));
+  $("#open-count").textContent = String(watches.filter(w => currentReport(w) && completeSet(w.snapshot)).length);
+  $("#closed-count").textContent = String(watches.filter(w => currentReport(w) && w.snapshot?.combination_status === "blocked").length);
+  const visible = watches.filter(w => selectedFilter === "all" || (selectedFilter === "open" ? currentReport(w) && completeSet(w.snapshot) : currentReport(w) && w.snapshot?.combination_status === "blocked"));
   $("#watch-cards").replaceChildren(...visible.map(renderCard));
   $("#empty-state").hidden = watches.length !== 0;
   $("#no-filter-results").hidden = watches.length === 0 || visible.length > 0;
@@ -170,12 +194,22 @@ function renderDashboard() {
   }));
 }
 
-async function loadDashboard() {
-  const data = await Promise.all([api("/api/watchlist"), api("/api/events"), api("/api/source")]);
-  watches = data[0];
-  events = data[1];
-  renderSource(data[2]);
-  renderDashboard();
+function loadDashboard(fresh = false) {
+  // Polling, SSE, and manual refresh share one local read instead of racing
+  // older responses against newer observations.
+  if (dashboardRequest) {
+    if (fresh) return dashboardRequest.catch(() => {}).then(() => loadDashboard());
+    return dashboardRequest;
+  }
+  dashboardRequest = (async () => {
+    const data = await Promise.all([api("/api/watchlist"), api("/api/events"), api("/api/source")]);
+    watches = data[0];
+    events = data[1];
+    sourceInfo = data[2];
+    renderSource(sourceInfo);
+    renderDashboard();
+  })().finally(() => { dashboardRequest = null; });
+  return dashboardRequest;
 }
 
 function renderSource(source) {
@@ -198,6 +232,7 @@ $("#resume-source").addEventListener("click", async () => {
   button.disabled = true;
   try {
     renderSource(await api("/api/source/resume", { method: "POST" }));
+    await loadDashboard(true);
     toast("Sign-in pause cleared. The next scheduled check will verify your session.");
   } catch (error) { toast(error.message, true); }
   finally { button.disabled = false; }
@@ -209,7 +244,7 @@ async function addWatch(url, button) {
   button.textContent = "Checking section…";
   try {
     const item = await api("/api/watchlist", { method: "POST", body: JSON.stringify({ source_url: url }) });
-    await loadDashboard();
+    await loadDashboard(true);
     $("#search-dialog").close();
     showView("watchlist");
     toast(item.error ? "Section saved. Its availability is unknown; the app will retry later." : "Added to your watchlist. Your first check sets the baseline.");
@@ -227,7 +262,7 @@ async function refreshWatch(id, button) {
   button.textContent = "Checking…";
   try {
     const result = await api(`/api/watchlist/${id}/refresh`, { method: "POST" });
-    await loadDashboard();
+    await loadDashboard(true);
     if (result.watch.error) toast("Availability is unknown. The previous report is preserved; a retry is scheduled.", true);
     else if (result.reopened) toast(`A seat opening was reported for a complete section set: ${combinationLabel(result.watch.snapshot)}. Confirm in MyUCLA.`);
     else if (result.cached) toast(`Already checked. Next source check: ${formattedTime(result.watch.next_check_at)}.`);
@@ -243,7 +278,7 @@ async function removeWatch(id, button) {
   button.disabled = true;
   try {
     await api(`/api/watchlist/${id}`, { method: "DELETE" });
-    await loadDashboard();
+    await loadDashboard(true);
     toast("Section removed from your watchlist.");
   } catch (error) {
     toast(error.message, true);
@@ -280,7 +315,7 @@ function connectAlerts() {
     const parts = courseParts({ snapshot: event.snapshot });
     toast(`A seat opening was reported: ${parts.code} ${combinationLabel(event.snapshot)}. Confirm in MyUCLA.`);
     $("#toast").dataset.eventId = String(event.id);
-    loadDashboard().catch(error => toast(error.message, true));
+    loadDashboard(true).catch(error => toast(error.message, true));
   });
   alertStream.onerror = () => {
     $("#alert-connection").textContent = "In-app alerts disconnected · reconnecting…";
@@ -385,3 +420,12 @@ bootstrap();
 window.addEventListener("pagehide", () => { if (alertStream) alertStream.close(); });
 window.addEventListener("pageshow", event => { if (event.persisted) connectAlerts(); });
 setInterval(() => { if (!document.hidden) loadDashboard().catch(error => toast(error.message, true)); }, 30000);
+setInterval(() => {
+  if (!document.hidden && expireReports()) renderDashboard();
+}, 1000);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) {
+    if (expireReports()) renderDashboard();
+    loadDashboard().catch(error => toast(error.message, true));
+  }
+});
